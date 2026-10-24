@@ -3,7 +3,7 @@ import Icon from './Icon';
 export type NavTab = 'home' | 'closet' | 'discover' | 'gifts' | 'profile';
 
 interface BottomNavProps {
-  current: NavTab;
+  current: NavTab | null;
   onChange: (tab: NavTab) => void;
   variant: 'home' | 'discovery';
 }

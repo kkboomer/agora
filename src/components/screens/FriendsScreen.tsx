@@ -19,9 +19,11 @@ const img = (id: string, w: number) =>
 interface Props {
   nav: NavTab;
   onNav: (tab: NavTab) => void;
+  name: string;
+  handle: string;
 }
 
-export default function FriendsScreen({ nav, onNav }: Props) {
+export default function FriendsScreen({ nav, onNav, name, handle }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const friend = friends.find((f) => f.name === selected);
 
@@ -59,7 +61,7 @@ export default function FriendsScreen({ nav, onNav }: Props) {
           ) : (
             <>
               <header className="friends-header">
-                <div><p>YOUR CIRCLE</p><h1>Jordan Lee</h1><span>@jordanl · AGORA-2841</span></div>
+                <div><p>YOUR CIRCLE</p><h1>{name}</h1><span>{handle} · AGORA-2841</span></div>
                 <button aria-label="Add friends"><Icon name="userPlus" size={23} /></button>
               </header>
               <div className="friends-heading"><div><span>FRIENDS</span><h2>Your circle</h2></div><small>{friends.length} friends</small></div>

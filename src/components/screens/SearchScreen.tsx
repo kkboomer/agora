@@ -11,13 +11,26 @@ export interface StyleFilter {
   query?: string;
 }
 
-const groups = [
-  { name: 'Tops', items: ['T-shirts', 'Shirts & blouses', 'Sweaters', 'Hoodies', 'Tank tops'] },
-  { name: 'Outerwear', items: ['Jackets', 'Coats', 'Blazers', 'Vests'] },
-  { name: 'Bottoms', items: ['Jeans', 'Trousers', 'Shorts', 'Skirts', 'Leggings'] },
-  { name: 'Dresses', items: ['Mini', 'Midi', 'Maxi', 'Occasion'] },
-  { name: 'Shoes', items: ['Sneakers', 'Boots', 'Heels', 'Sandals', 'Flats'] },
-  { name: 'Accessories', items: ['Bags', 'Jewelry', 'Hats', 'Belts', 'Scarves'] },
+interface Category {
+  name: string;
+  /** Hide for the other gender when set. */
+  only?: Gender;
+  /** Label to use instead of `name` for men. */
+  menName?: string;
+}
+interface Group {
+  name: string;
+  only?: Gender;
+  items: Category[];
+}
+
+const groups: Group[] = [
+  { name: 'Tops', items: [{ name: 'T-shirts' }, { name: 'Shirts & blouses', menName: 'Shirts' }, { name: 'Sweaters' }, { name: 'Hoodies' }, { name: 'Tank tops' }] },
+  { name: 'Outerwear', items: [{ name: 'Jackets' }, { name: 'Coats' }, { name: 'Blazers' }, { name: 'Vests' }] },
+  { name: 'Bottoms', items: [{ name: 'Jeans' }, { name: 'Trousers' }, { name: 'Shorts' }, { name: 'Skirts', only: 'women' }, { name: 'Leggings', only: 'women' }] },
+  { name: 'Dresses', only: 'women', items: [{ name: 'Mini' }, { name: 'Midi' }, { name: 'Maxi' }, { name: 'Occasion' }] },
+  { name: 'Shoes', items: [{ name: 'Sneakers' }, { name: 'Boots' }, { name: 'Heels', only: 'women' }, { name: 'Sandals' }, { name: 'Flats', only: 'women' }] },
+  { name: 'Accessories', items: [{ name: 'Bags' }, { name: 'Jewelry' }, { name: 'Hats' }, { name: 'Belts' }, { name: 'Scarves' }] },
 ];
 
 interface Props {
@@ -30,15 +43,18 @@ interface Props {
 
 export default function SearchScreen({ nav, onNav, initialGender, onSelect, onSearch }: Props) {
   const [gender, setGender] = useState<Gender>(initialGender);
-  const [open, setOpen] = useState<string | null>('Outerwear');
+  const [open, setOpen] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
   const q = query.trim().toLowerCase();
   const visible = groups
-    .map((g) => ({
-      ...g,
-      items: q && !g.name.toLowerCase().includes(q) ? g.items.filter((i) => i.toLowerCase().includes(q)) : g.items,
-    }))
+    .filter((g) => !g.only || g.only === gender)
+    .map((g) => {
+      const items = g.items
+        .filter((i) => !i.only || i.only === gender)
+        .map((i) => (gender === 'men' && i.menName ? i.menName : i.name));
+      return { name: g.name, items: q && !g.name.toLowerCase().includes(q) ? items.filter((i) => i.toLowerCase().includes(q)) : items };
+    })
     .filter((g) => g.items.length > 0);
 
   return (
@@ -59,7 +75,7 @@ export default function SearchScreen({ nav, onNav, initialGender, onSelect, onSe
               if (query.trim()) onSearch(query.trim());
             }}
           >
-            <Icon name="search" size={20} />
+            <button type="submit" className="search-submit" aria-label="Search"><Icon name="search" size={20} /></button>
             <input
               type="search"
               placeholder="Search jackets, jeans, sweaters…"
