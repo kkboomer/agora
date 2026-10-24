@@ -37,7 +37,7 @@ export default function TestCoinsSandbox() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 flex flex-col">
+    <div className="mx-auto min-h-screen w-full max-w-[430px] bg-zinc-50 flex flex-col">
       {/* Mock Top Navbar showing Person 3's Coin Widget */}
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-zinc-200 bg-white/90 backdrop-blur-md px-4 py-3">
         <div className="font-black tracking-tight text-lg text-zinc-900">
