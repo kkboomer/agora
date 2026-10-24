@@ -6,8 +6,12 @@ import type { DiscoverItem } from '@/lib/discoverFeed';
 import { discountAmount, findDiscount } from '@/lib/discounts';
 
 export interface CartLine {
+  /** Unique per product + colour + size. */
+  key: string;
   item: DiscoverItem;
   qty: number;
+  color?: string;
+  size?: string;
 }
 
 export const money = (n: number) =>
@@ -18,7 +22,7 @@ interface Props {
   onNav: (tab: NavTab) => void;
   onBack: () => void;
   lines: CartLine[];
-  onChangeQty: (id: string, delta: 1 | -1) => void;
+  onChangeQty: (key: string, delta: 1 | -1) => void;
   appliedCode: string | null;
   onApplyCode: (code: string | null) => void;
 }
@@ -64,21 +68,21 @@ export default function CartScreen({ nav, onNav, onBack, lines, onChangeQty, app
             </div>
           ) : (
             <ul className="cart-list">
-              {lines.map(({ item, qty }) => (
-                <li key={item.id} className="cart-item">
+              {lines.map(({ key, item, qty, color, size }) => (
+                <li key={key} className="cart-item">
                   <img src={item.image} alt={item.alt} style={{ objectPosition: item.focus }} />
                   <div className="cart-info">
                     <small>{item.brand}</small>
                     <h2>{item.title}</h2>
-                    <p>{item.description}</p>
+                    <p>{color || size ? [color, size && `Size ${size}`].filter(Boolean).join(' · ') : item.description}</p>
                     <div className="cart-bottom">
                       <strong>{money(item.price)}</strong>
                       <div className="qty" role="group" aria-label={`Quantity for ${item.title}`}>
-                        <button onClick={() => onChangeQty(item.id, -1)} aria-label={qty === 1 ? 'Remove from cart' : 'Decrease quantity'}>
+                        <button onClick={() => onChangeQty(key, -1)} aria-label={qty === 1 ? 'Remove from cart' : 'Decrease quantity'}>
                           <Icon name={qty === 1 ? 'trash' : 'minus'} size={15} />
                         </button>
                         <span aria-live="polite">{qty}</span>
-                        <button onClick={() => onChangeQty(item.id, 1)} aria-label="Increase quantity"><Icon name="plus" size={15} /></button>
+                        <button onClick={() => onChangeQty(key, 1)} aria-label="Increase quantity"><Icon name="plus" size={15} /></button>
                       </div>
                     </div>
                   </div>

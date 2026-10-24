@@ -4,8 +4,8 @@
 import { useState } from 'react';
 import BottomSheet from './BottomSheet';
 import Icon from './Icon';
-import { LIKED_ID, type Collection } from '@/lib/collections';
-import { DISCOVER_ITEMS, type DiscoverItem } from '@/lib/discoverFeed';
+import { LIKED_ID, collectionCount, tilesOf, type Collection } from '@/lib/collections';
+import type { DiscoverItem } from '@/lib/discoverFeed';
 
 interface Props {
   item: DiscoverItem;
@@ -16,7 +16,7 @@ interface Props {
   onCreate: (name: string) => void;
 }
 
-const coverOf = (c: Collection) => c.covers?.[0] ?? DISCOVER_ITEMS.find((i) => i.id === c.itemIds[0])?.image;
+const coverOf = (c: Collection) => tilesOf(c)[0]?.item.image;
 
 /** Half-height sheet for adding an item to Liked, one of your collections, or a brand-new one. */
 export default function CollectionSheet({ item, collections, open, onClose, onToggle, onCreate }: Props) {
@@ -57,7 +57,7 @@ export default function CollectionSheet({ item, collections, open, onClose, onTo
                 </span>
                 <span className="coll-name">
                   <strong>{c.name}</strong>
-                  <small>{c.baseCount + c.itemIds.length} pieces · Private</small>
+                  <small>{collectionCount(c)} {collectionCount(c) === 1 ? 'piece' : 'pieces'} · {c.isPrivate ? 'Private' : 'Public'}</small>
                 </span>
                 <span className={`coll-check ${inIt ? 'on' : ''}`}>{inIt && <Icon name="check" size={14} />}</span>
               </button>

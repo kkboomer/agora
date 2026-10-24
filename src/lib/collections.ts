@@ -1,22 +1,54 @@
+import { findProduct, type DiscoverItem } from '@/lib/discoverFeed';
+
+/** A starting entry in a collection: a product id plus the tile's aspect ratio (width / height). */
+export interface Piece {
+  itemId: string;
+  ratio: number;
+}
+
+/** A resolved tile: the product and how tall to draw its photo. */
+export interface Tile {
+  item: DiscoverItem;
+  ratio: number;
+}
+
 export interface Collection {
   id: string;
   name: string;
-  /** Mock pieces already in the collection before anything is saved in this session. */
-  baseCount: number;
-  /** Items saved from Discover (ids from DISCOVER_ITEMS). */
+  isPrivate: boolean;
+  /** Mock pieces that were already in the collection before anything is saved in this session. */
+  pieces: Piece[];
+  /** Items saved from Discover (product ids). */
   itemIds: string[];
-  /** Mock cover photos for the pre-made collections; new ones use their first items. */
-  covers?: string[];
 }
 
 export const LIKED_ID = 'liked';
 
-const photo = (id: string, w: number) =>
-  `https://images.unsplash.com/photo-${id}?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=82&w=${w}`;
+const COAT = { itemId: 'atelier-signature-coat', ratio: 0.75 };
+const BLAZER = { itemId: 'frankie-oversized-tailoring', ratio: 1 };
+const JACKET = { itemId: 'nicholson-volume-jacket', ratio: 0.8 };
+const TRENCH = { itemId: 'everyday-trench', ratio: 0.66 };
+const MIDI = { itemId: 'sculpted-midi', ratio: 0.9 };
+
+export const ALL_PIECES: Piece[] = [COAT, BLAZER, JACKET, TRENCH, MIDI];
 
 // Mock starting collections until these come from Supabase.
 export const INITIAL_COLLECTIONS: Collection[] = [
-  { id: LIKED_ID, name: 'Liked items', baseCount: 11, itemIds: [], covers: [photo('1762605135012-56a59a059e60', 500), photo('1613915617430-8ab0fd7c6baf', 400)] },
-  { id: 'layers', name: 'Everyday layers', baseCount: 8, itemIds: [], covers: [photo('1692180142575-c31fcd106b5b', 400), photo('1603189343302-e603f7add05a', 400)] },
-  { id: 'occasion', name: 'Occasion', baseCount: 5, itemIds: [], covers: [photo('1659522761084-79196b64abe4', 600)] },
+  { id: LIKED_ID, name: 'Liked items', isPrivate: true, itemIds: [], pieces: [COAT, BLAZER, JACKET, TRENCH, MIDI] },
+  { id: 'layers', name: 'Everyday layers', isPrivate: true, itemIds: [], pieces: [TRENCH, JACKET, BLAZER] },
+  { id: 'occasion', name: 'Occasion', isPrivate: true, itemIds: [], pieces: [MIDI, COAT] },
 ];
+
+/** Everything in a collection, in order: starting pieces first, then items saved from Discover. */
+export function tilesOf(c: Collection): Tile[] {
+  const resolve = (itemId: string, ratio: number): Tile[] => {
+    const item = findProduct(itemId);
+    return item ? [{ item, ratio }] : [];
+  };
+  return [
+    ...c.pieces.filter((p) => !c.itemIds.includes(p.itemId)).flatMap((p) => resolve(p.itemId, p.ratio)),
+    ...c.itemIds.flatMap((id) => resolve(id, 0.75)),
+  ];
+}
+
+export const collectionCount = (c: Collection) => tilesOf(c).length;

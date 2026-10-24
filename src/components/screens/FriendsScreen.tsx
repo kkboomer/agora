@@ -3,20 +3,47 @@
 
 import { useState } from 'react';
 import Icon from '@/components/ui/Icon';
+import Stars from '@/components/ui/Stars';
+import BottomSheet from '@/components/ui/BottomSheet';
 import BottomNav, { type NavTab } from '@/components/ui/BottomNav';
-import type { FriendWithCollections } from '@/types/types';
+import CollectionScreen from '@/components/screens/CollectionScreen';
+import type { Variant } from '@/components/ui/ProductSheet';
+import { collectionCount, tilesOf, type Collection } from '@/lib/collections';
+import type { Friend } from '@/lib/friends';
+import { REVIEWS } from '@/lib/reviews';
+import { findProduct } from '@/lib/discoverFeed';
 
 interface Props {
   nav: NavTab;
   onNav: (tab: NavTab) => void;
-  friends: FriendWithCollections[];
   name: string;
   handle: string;
+  friends: Friend[];
+  onUnfriend: (tag: string) => void;
+  onAddToCart: (itemId: string, variant: Variant) => void;
 }
 
-export default function FriendsScreen({ nav, onNav, friends, name, handle }: Props) {
+export default function FriendsScreen({ nav, onNav, name, handle, friends, onUnfriend, onAddToCart }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
-  const friend = friends.find((f) => f.profile.id === selected);
+  const [friendTab, setFriendTab] = useState<'collections' | 'reviews'>('collections');
+  const [viewing, setViewing] = useState<Collection | null>(null);
+  const [confirmUnfriend, setConfirmUnfriend] = useState(false);
+  const friend = friends.find((f) => f.name === selected);
+  if (friend && viewing) {
+    return (
+      <CollectionScreen
+        nav={nav}
+        onNav={onNav}
+        onBack={() => setViewing(null)}
+        collection={viewing}
+        readOnly
+        ownerName={friend.name.split(' ')[0]}
+        onAddToCart={onAddToCart}
+      />
+    );
+  }
+
+  const friendReviews = friend ? REVIEWS.filter((r) => r.user === friend.tag.slice(1)) : [];
 
   return (
     <main className="app-shell">
@@ -25,22 +52,59 @@ export default function FriendsScreen({ nav, onNav, friends, name, handle }: Pro
           {friend ? (
             <>
               <header className="friend-profile-header">
-                <button onClick={() => setSelected(null)} aria-label="Back to friends"><Icon name="back" /></button>
-                <div className="large-friend-avatar">{friend.profile.display_name[0]}</div>
-                <h1>{friend.profile.display_name}</h1><p>@{friend.profile.username}</p>
+                <button onClick={() => { setSelected(null); setFriendTab('collections'); }} aria-label="Back to friends"><Icon name="back" /></button>
+                <div className="large-friend-avatar" style={{ background: friend.color }}>{friend.initial}</div>
+                <button className="friend-more" onClick={() => setConfirmUnfriend(true)} aria-label={`Unfriend ${friend.name}`}><Icon name="userMinus" size={20} /></button>
+                <h1>{friend.name}</h1><p>{friend.tag}</p>
               </header>
-              <div className="friend-profile-title"><span>COLLECTIONS</span><h2>Saved by {friend.profile.display_name.split(' ')[0]}</h2></div>
-              <section className="collections-grid friend-collections">
-                {friend.collections.map((collection) => (
-                  <article className="collection-card" key={collection.id}>
-                    <div className={`collection-cover ${collection.items.length > 1 ? 'split-cover' : ''}`}>
-                      {collection.items.slice(0, 2).map((item) => <img key={item.product.id} src={item.product.image_url} alt="" />)}
-                      {collection.name === 'Liked items' && <span><Icon name="heart" size={18} filled /></span>}
+              <div className="profile-tabs" role="tablist">
+                <button role="tab" aria-selected={friendTab === 'collections'} className={friendTab === 'collections' ? 'active' : ''} onClick={() => setFriendTab('collections')}>Collections</button>
+                <button role="tab" aria-selected={friendTab === 'reviews'} className={friendTab === 'reviews' ? 'active' : ''} onClick={() => setFriendTab('reviews')}>Reviews</button>
+              </div>
+              {friendTab === 'reviews' ? (
+                <section className="friend-reviews" aria-label={`Reviews left by ${friend.name}`}>
+                  {friendReviews.length === 0 ? (
+                    <div className="saved-empty">
+                      <span><Icon name="star" size={26} /></span>
+                      <h2>No reviews yet</h2>
+                      <p>{friend.name.split(' ')[0]} hasn’t reviewed anything.</p>
                     </div>
-                    <h2>{collection.name}</h2><p>{collection.items.length} pieces</p>
-                  </article>
-                ))}
+                  ) : (
+                    friendReviews.map((r) => {
+                      const product = findProduct(r.itemId);
+                      if (!product) return null;
+                      return (
+                        <article key={r.id} className="friend-review">
+                          <img src={product.image} alt="" style={{ objectPosition: product.focus }} />
+                          <div>
+                            <small>{product.brand}</small>
+                            <h2>{product.title}</h2>
+                            <div className="friend-review-stars"><Stars rating={r.rating} size={13} /><span>{r.when} ago</span></div>
+                            <p>{r.text}</p>
+                          </div>
+                        </article>
+                      );
+                    })
+                  )}
+                </section>
+              ) : (
+              <section className="collections-grid friend-collections">
+                {friend.collections.map((c) => {
+                  const count = collectionCount(c);
+                  const covers = tilesOf(c).slice(0, 2).map((t) => t.item.image);
+                  const liked = c.name === 'Liked items';
+                  return (
+                    <button key={c.id} className="collection-card" onClick={() => setViewing(c)} aria-label={`Open ${c.name}`}>
+                      <div className={`collection-cover ${liked ? 'favorites-cover' : covers.length > 1 ? 'split-cover' : ''}`}>
+                        {covers.map((src) => <img key={src} src={src} alt="" />)}
+                        {liked && <span><Icon name="heart" size={18} filled /></span>}
+                      </div>
+                      <h2>{c.name}</h2><p>{count} {count === 1 ? 'piece' : 'pieces'}</p>
+                    </button>
+                  );
+                })}
               </section>
+              )}
             </>
           ) : (
             <>
@@ -50,10 +114,17 @@ export default function FriendsScreen({ nav, onNav, friends, name, handle }: Pro
               </header>
               <div className="friends-heading"><div><span>FRIENDS</span><h2>Your circle</h2></div><small>{friends.length} friends</small></div>
               <section className="friends-list">
+                {friends.length === 0 && (
+                  <div className="saved-empty">
+                    <span><Icon name="userPlus" size={26} /></span>
+                    <h2>No friends yet</h2>
+                    <p>Share your tag so friends can find you.</p>
+                  </div>
+                )}
                 {friends.map((item) => (
-                  <button key={item.profile.id} className="friend-row" onClick={() => setSelected(item.profile.id)}>
-                    <span className="list-avatar">{item.profile.display_name[0]}</span>
-                    <span className="friend-identity"><strong>{item.profile.display_name}</strong><small>@{item.profile.username} · {item.collections.length} collections</small></span>
+                  <button key={item.name} className="friend-row" onClick={() => { setSelected(item.name); setFriendTab('collections'); }}>
+                    <span className="list-avatar" style={{ background: item.color }}>{item.initial}</span>
+                    <span className="friend-identity"><strong>{item.name}</strong><small>{item.tag} · {item.collections.length} collections</small></span>
                     <Icon name="arrow" size={18} />
                   </button>
                 ))}
@@ -66,6 +137,34 @@ export default function FriendsScreen({ nav, onNav, friends, name, handle }: Pro
             </>
           )}
         </div>
+        {friend && (
+          <BottomSheet
+            open={confirmUnfriend}
+            onClose={() => setConfirmUnfriend(false)}
+            label={`Unfriend ${friend.name}`}
+            height="38%"
+            title={<div><h2>Unfriend {friend.name.split(' ')[0]}?</h2></div>}
+          >
+            <div className="edit-body">
+              <p className="unfriend-note">
+                You’ll stop seeing {friend.name.split(' ')[0]}’s collections and reviews, and they’ll disappear from your circle. You can add each other again later.
+              </p>
+              <button
+                className="sheet-danger"
+                onClick={() => {
+                  onUnfriend(friend.tag);
+                  setConfirmUnfriend(false);
+                  setSelected(null);
+                  setFriendTab('collections');
+                }}
+              >
+                Unfriend
+              </button>
+              <button className="sheet-cancel" onClick={() => setConfirmUnfriend(false)}>Cancel</button>
+            </div>
+          </BottomSheet>
+        )}
+
         <BottomNav current={nav} onChange={onNav} variant="home" />
       </section>
     </main>
