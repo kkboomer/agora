@@ -12,7 +12,7 @@ import SearchScreen, { type StyleFilter } from '@/components/screens/SearchScree
 import type { FeedTab, SwipeIntent } from '@/components/screens/DiscoverScreen';
 import DevNav, { type DevScreen } from '@/components/ui/DevNav';
 import { DISCOVER_ITEMS } from '@/lib/discoverFeed';
-import { REVIEWS, type Review } from '@/lib/reviews';
+import { REVIEWS } from '@/lib/reviews';
 import { LIKED_ID, type Collection as UiCollection } from '@/lib/collections';
 import { fetchCartItems, fetchCollections, fetchFriendsWithCollections, recordSwipe, removeFromCart, toggleLikedItem } from '@/lib/supabase/api';
 import { DEMO_USER_ID } from '@/lib/supabase/client';
@@ -33,7 +33,6 @@ export default function AgoraApp() {
   const [collections, setCollections] = useState<(DbCollection & { items: { product: DbProduct }[] })[]>([]);
   const [friends, setFriends] = useState<FriendWithCollections[]>([]);
   const [cart, setCart] = useState<CartEntry[]>([]);
-  const [myReviews, setMyReviews] = useState<Record<string, Review>>({});
   const [discountCode, setDiscountCode] = useState<string | null>(null);
   const [userName, setUserName] = useState('Alex Rivera');
   const [darkMode, setDarkMode] = useState(false);
@@ -98,23 +97,6 @@ export default function AgoraApp() {
     setCart((c) => c.flatMap((e) => (e.id !== id ? [e] : e.qty + delta <= 0 ? [] : [{ ...e, qty: e.qty + delta }])));
   };
 
-  const saveReview = (itemId: string, rating: number, text: string) =>
-    setMyReviews((m) => ({
-      ...m,
-      [itemId]: {
-        id: `mine-${itemId}`,
-        itemId,
-        user: userHandle.replace('@', ''),
-        color: '#24211d',
-        rating: rating as Review['rating'],
-        text,
-        when: 'Just now',
-        likes: 0,
-      },
-    }));
-
-  const allReviews = [...Object.values(myReviews), ...REVIEWS];
-
   const toggleInCollection = async (collectionId: string, itemId: string) => {
     const discoverItem = DISCOVER_ITEMS.find((item) => item.id === itemId);
     if (!discoverItem) return;
@@ -169,7 +151,6 @@ export default function AgoraApp() {
 
   const handleLogout = () => {
     setCart([]);
-    setMyReviews({});
     setDiscountCode(null);
     setFilter(null);
     setUserName('Alex Rivera');
@@ -253,7 +234,7 @@ export default function AgoraApp() {
             onSwipe={handleSwipe}
             cartCount={cartCount}
             onOpenCart={() => setOverlay('cart')}
-            reviews={allReviews}
+            reviews={REVIEWS}
           />
         );
     }
