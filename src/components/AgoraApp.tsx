@@ -12,8 +12,11 @@ import SearchScreen, { type StyleFilter } from '@/components/screens/SearchScree
 import type { FeedTab, SwipeIntent } from '@/components/screens/DiscoverScreen';
 import DevNav, { type DevScreen } from '@/components/ui/DevNav';
 import { DISCOVER_ITEMS } from '@/lib/discoverFeed';
-import { REVIEWS, type Review } from '@/lib/reviews';
-import { INITIAL_COLLECTIONS, LIKED_ID, type Collection } from '@/lib/collections';
+import { REVIEWS } from '@/lib/reviews';
+import { LIKED_ID, type Collection as UiCollection } from '@/lib/collections';
+import { fetchCartItems, fetchCollections, fetchFriendsWithCollections, recordSwipe, removeFromCart, toggleLikedItem } from '@/lib/supabase/api';
+import { DEMO_USER_ID } from '@/lib/supabase/client';
+import type { Collection as DbCollection, FriendWithCollections, Product as DbProduct } from '@/types/types';
 
 /** Screens that sit outside the bottom-nav tabs. */
 type Overlay = 'search' | 'settings' | 'cart' | null;
@@ -27,17 +30,32 @@ export default function AgoraApp() {
   const [overlay, setOverlay] = useState<Overlay>(null);
   const [filter, setFilter] = useState<StyleFilter | null>(null);
   const [feedTab, setFeedTab] = useState<FeedTab>('For You');
-  const [collections, setCollections] = useState<Collection[]>(INITIAL_COLLECTIONS);
+  const [collections, setCollections] = useState<(DbCollection & { items: { product: DbProduct }[] })[]>([]);
+  const [friends, setFriends] = useState<FriendWithCollections[]>([]);
   const [cart, setCart] = useState<CartEntry[]>([]);
-  const [myReviews, setMyReviews] = useState<Record<string, Review>>({});
   const [discountCode, setDiscountCode] = useState<string | null>(null);
-  const [userName, setUserName] = useState('Jordan Lee');
+  const [userName, setUserName] = useState('Alex Rivera');
   const [darkMode, setDarkMode] = useState(false);
-  const userHandle = '@jordanl';
+  const userHandle = '@alex_cal';
 
   useEffect(() => {
     document.documentElement.dataset.theme = darkMode ? 'dark' : 'light';
   }, [darkMode]);
+
+  useEffect(() => {
+    Promise.all([fetchCartItems(DEMO_USER_ID), fetchCollections(DEMO_USER_ID), fetchFriendsWithCollections(DEMO_USER_ID)])
+      .then(([cartRows, accountCollections, accountFriends]) => {
+        setCart(
+          cartRows.flatMap((item) => {
+            const discoverItem = DISCOVER_ITEMS.find((candidate) => candidate.productId === item.product_id);
+            return discoverItem ? [{ id: discoverItem.id, qty: 1 }] : [];
+          })
+        );
+        setCollections(accountCollections);
+        setFriends(accountFriends);
+      })
+      .catch((error) => console.error('Error loading demo account:', error));
+  }, []);
 
   const cartCount = cart.reduce((n, e) => n + e.qty, 0);
   const cartLines = cart.flatMap((e) => {
@@ -45,38 +63,55 @@ export default function AgoraApp() {
     return item ? [{ item, qty: e.qty }] : [];
   });
 
+  const uiCollections: UiCollection[] = collections
+    .map((collection) => ({
+      id: collection.name === 'Liked items' ? LIKED_ID : collection.id,
+      name: collection.name,
+      baseCount: 0,
+      itemIds: collection.items.flatMap((item) => {
+        const discoverItem = DISCOVER_ITEMS.find((candidate) => candidate.productId === item.product.id);
+        return discoverItem ? [discoverItem.id] : [];
+      }),
+      covers: collection.items.slice(0, 2).map((item) => item.product.image_url),
+    }))
+    .sort((a, b) => Number(b.id === LIKED_ID) - Number(a.id === LIKED_ID));
+
+  const likedCollection = collections.find((collection) => collection.name === 'Liked items');
+  const likedItems = likedCollection
+    ? likedCollection.items.flatMap((item) => {
+      const discoverItem = DISCOVER_ITEMS.find((candidate) => candidate.productId === item.product.id);
+      return discoverItem ? [discoverItem] : [];
+    })
+    : [];
+
   const addToCart = (id: string) =>
     setCart((c) => (c.some((e) => e.id === id) ? c.map((e) => (e.id === id ? { ...e, qty: e.qty + 1 } : e)) : [...c, { id, qty: 1 }]));
-  const changeQty = (id: string, delta: 1 | -1) =>
+
+  const changeQty = async (id: string, delta: 1 | -1) => {
+    const current = cart.find((entry) => entry.id === id)?.qty ?? 0;
+    if (delta === -1 && current <= 1) {
+      const discoverItem = DISCOVER_ITEMS.find((item) => item.id === id);
+      if (discoverItem) await removeFromCart(discoverItem.productId, DEMO_USER_ID);
+    }
+
     setCart((c) => c.flatMap((e) => (e.id !== id ? [e] : e.qty + delta <= 0 ? [] : [{ ...e, qty: e.qty + delta }])));
+  };
 
-  const saveReview = (itemId: string, rating: number, text: string) =>
-    setMyReviews((m) => ({
-      ...m,
-      [itemId]: {
-        id: `mine-${itemId}`,
-        itemId,
-        user: userHandle.replace('@', ''),
-        color: '#24211d',
-        rating: rating as Review['rating'],
-        text,
-        when: 'Just now',
-        likes: 0,
-      },
-    }));
-  // Your own reviews show first, ahead of everyone else's.
-  const allReviews = [...Object.values(myReviews), ...REVIEWS];
+  const toggleInCollection = async (collectionId: string, itemId: string) => {
+    const discoverItem = DISCOVER_ITEMS.find((item) => item.id === itemId);
+    if (!discoverItem) return;
 
-  const toggleInCollection = (collectionId: string, itemId: string) =>
-    setCollections((cs) =>
-      cs.map((c) =>
-        c.id !== collectionId
-          ? c
-          : { ...c, itemIds: c.itemIds.includes(itemId) ? c.itemIds.filter((i) => i !== itemId) : [...c.itemIds, itemId] },
-      ),
-    );
-  const createCollection = (name: string, itemId: string) =>
-    setCollections((cs) => [...cs, { id: `c-${Date.now()}`, name, baseCount: 0, itemIds: [itemId] }]);
+    const canToggleLiked = collectionId === LIKED_ID || collections.some((collection) => collection.id === collectionId && collection.name === 'Liked items');
+    if (!canToggleLiked) return;
+
+    const liked = await toggleLikedItem(discoverItem.productId, DEMO_USER_ID);
+    if (!liked) return;
+    setCollections(await fetchCollections(DEMO_USER_ID));
+  };
+
+  const createCollection = () => {
+    // New collection creation is not yet wired to Supabase.
+  };
 
   const goTo = (tab: NavTab) => {
     if (tab === 'closet') {
@@ -86,29 +121,39 @@ export default function AgoraApp() {
     setOverlay(null);
     setNav(tab);
   };
-  const handleSwipe = (intent: SwipeIntent, id: string) => {
+
+  const handleSwipe = async (intent: SwipeIntent, id: string) => {
+    const item = DISCOVER_ITEMS.find((discoverItem) => discoverItem.id === id);
+    if (!item) return;
+
+    const persisted = await recordSwipe(item.productId, intent === 'reject' ? 'left' : 'right', DEMO_USER_ID, intent === 'cart');
+    if (!persisted) return;
+
     if (intent === 'like') {
-      setCollections((cs) => cs.map((c) => (c.id === LIKED_ID && !c.itemIds.includes(id) ? { ...c, itemIds: [...c.itemIds, id] } : c)));
+      const liked = await toggleLikedItem(item.productId, DEMO_USER_ID);
+      if (!liked) return;
+      setCollections(await fetchCollections(DEMO_USER_ID));
     }
+
     if (intent === 'cart') addToCart(id);
   };
+
   const runSearch = (query: string) => {
     setFilter({ query });
     goTo('discover');
   };
+
   const seeAll = (tab: FeedTab) => {
     setFeedTab(tab);
     setFilter(null);
     goTo('discover');
   };
+
   const handleLogout = () => {
-    // Mock: there's no auth yet, so just reset the session state.
-    setCollections(INITIAL_COLLECTIONS);
     setCart([]);
-    setMyReviews({});
     setDiscountCode(null);
     setFilter(null);
-    setUserName('Jordan Lee');
+    setUserName('Alex Rivera');
     goTo('discover');
   };
 
@@ -165,15 +210,14 @@ export default function AgoraApp() {
           <ProfileScreen
             nav={nav}
             onNav={goTo}
+            savedItems={likedItems}
             collections={collections}
-            myReviews={myReviews}
-            onSaveReview={saveReview}
             name={userName}
             onOpenSettings={() => setOverlay('settings')}
           />
         );
       case 'gifts':
-        return <FriendsScreen nav={nav} onNav={goTo} name={userName} handle={userHandle} />;
+        return <FriendsScreen nav={nav} onNav={goTo} friends={friends} name={userName} handle={userHandle} />;
       default:
         return (
           <DiscoverScreen
@@ -184,13 +228,13 @@ export default function AgoraApp() {
             filter={filter}
             onOpenSearch={() => setOverlay('search')}
             onClearFilter={() => setFilter(null)}
-            collections={collections}
+            collections={uiCollections}
             onToggleCollection={toggleInCollection}
             onCreateCollection={createCollection}
             onSwipe={handleSwipe}
             cartCount={cartCount}
             onOpenCart={() => setOverlay('cart')}
-            reviews={allReviews}
+            reviews={REVIEWS}
           />
         );
     }

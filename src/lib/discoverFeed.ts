@@ -1,5 +1,6 @@
 export interface DiscoverItem {
   id: string;
+  productId: string;
   brand: string;
   title: string;
   description: string;
@@ -15,6 +16,7 @@ export interface DiscoverItem {
 export const DISCOVER_ITEMS: DiscoverItem[] = [
   {
     id: 'atelier-signature-coat',
+    productId: '22222222-2222-2222-2222-222222222201',
     brand: 'ATELIER N°7',
     title: 'The Signature Wool Coat',
     description: 'Long wool-blend coat in warm oatmeal',
@@ -27,6 +29,7 @@ export const DISCOVER_ITEMS: DiscoverItem[] = [
   },
   {
     id: 'lewkin-nayela-jeans',
+    productId: '22222222-2222-2222-2222-222222222205',
     brand: 'LEWKIN',
     title: 'Nayela Vintage Wide Leg Jeans',
     description: 'Washed low-rise denim with a relaxed wide leg',

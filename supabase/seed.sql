@@ -6,6 +6,10 @@ truncate table
   public.reviews,
   public.pins,
   public.purchases,
+  public.cart_items,
+  public.collection_items,
+  public.collections,
+  public.friendships,
   public.swipes,
   public.products,
   public.profiles
@@ -33,6 +37,26 @@ values
     'Curating vintage outerwear & minimalist essentials ✨',
     820,
     7,
+    current_date
+  ),
+  (
+    '44444444-4444-4444-4444-444444444444',
+    'sofia_reyes',
+    'Sofia Reyes',
+    'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=400',
+    'Vintage denim, soft tailoring, and weekend layers.',
+    610,
+    3,
+    current_date
+  ),
+  (
+    '55555555-5555-5555-5555-555555555555',
+    'noah_williams',
+    'Noah Williams',
+    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
+    'Technical pieces for city miles and long weekends.',
+    275,
+    2,
     current_date
   );
 
@@ -144,20 +168,59 @@ values
     400
   );
 
--- 3. SEED PAST PURCHASES (So Person 2's "Recent Purchases" tab has data right away)
+-- 3. SEED RELATIONSHIPS, COLLECTIONS, AND THE DEFAULT CART
+insert into public.friendships (requester_id, addressee_id, status)
+values
+  ('11111111-1111-1111-1111-111111111111', '33333333-3333-3333-3333-333333333333', 'accepted'),
+  ('11111111-1111-1111-1111-111111111111', '44444444-4444-4444-4444-444444444444', 'accepted'),
+  ('55555555-5555-5555-5555-555555555555', '11111111-1111-1111-1111-111111111111', 'accepted');
+
+insert into public.collections (id, user_id, name, is_public)
+values
+  ('66666666-6666-6666-6666-666666666601', '11111111-1111-1111-1111-111111111111', 'Liked items', false),
+  ('66666666-6666-6666-6666-666666666602', '11111111-1111-1111-1111-111111111111', 'Everyday layers', false),
+  ('66666666-6666-6666-6666-666666666603', '11111111-1111-1111-1111-111111111111', 'Desk setup', true),
+  ('66666666-6666-6666-6666-666666666611', '33333333-3333-3333-3333-333333333333', 'Liked items', true),
+  ('66666666-6666-6666-6666-666666666612', '33333333-3333-3333-3333-333333333333', 'Soft tailoring', true),
+  ('66666666-6666-6666-6666-666666666621', '44444444-4444-4444-4444-444444444444', 'Liked items', true),
+  ('66666666-6666-6666-6666-666666666622', '44444444-4444-4444-4444-444444444444', 'Weekend uniform', true),
+  ('66666666-6666-6666-6666-666666666631', '55555555-5555-5555-5555-555555555555', 'Liked items', true),
+  ('66666666-6666-6666-6666-666666666632', '55555555-5555-5555-5555-555555555555', 'City miles', true);
+
+insert into public.collection_items (collection_id, product_id)
+values
+  ('66666666-6666-6666-6666-666666666601', '22222222-2222-2222-2222-222222222201'),
+  ('66666666-6666-6666-6666-666666666601', '22222222-2222-2222-2222-222222222204'),
+  ('66666666-6666-6666-6666-666666666602', '22222222-2222-2222-2222-222222222205'),
+  ('66666666-6666-6666-6666-666666666602', '22222222-2222-2222-2222-222222222206'),
+  ('66666666-6666-6666-6666-666666666603', '22222222-2222-2222-2222-222222222204'),
+  ('66666666-6666-6666-6666-666666666611', '22222222-2222-2222-2222-222222222203'),
+  ('66666666-6666-6666-6666-666666666612', '22222222-2222-2222-2222-222222222205'),
+  ('66666666-6666-6666-6666-666666666612', '22222222-2222-2222-2222-222222222207'),
+  ('66666666-6666-6666-6666-666666666621', '22222222-2222-2222-2222-222222222201'),
+  ('66666666-6666-6666-6666-666666666622', '22222222-2222-2222-2222-222222222206'),
+  ('66666666-6666-6666-6666-666666666622', '22222222-2222-2222-2222-222222222208'),
+  ('66666666-6666-6666-6666-666666666631', '22222222-2222-2222-2222-222222222202'),
+  ('66666666-6666-6666-6666-666666666632', '22222222-2222-2222-2222-222222222206');
+
+insert into public.cart_items (user_id, product_id)
+values
+  ('11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222201');
+
+-- 4. SEED PAST PURCHASES (So Person 2's "Recent Purchases" tab has data right away)
 insert into public.purchases (user_id, product_id, price_paid, coins_earned, is_public)
 values
   ('11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222207', 76.00, 0, true),
   ('11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222206', 85.00, 180, true);
 
--- 4. SEED PINS (So Person 2's "Pins" Masonry Grid looks like Pinterest immediately)
+-- 5. SEED PINS (So Person 2's "Pins" Masonry Grid looks like Pinterest immediately)
 insert into public.pins (user_id, product_id, board_name, note)
 values
   ('11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222201', 'Fall Rotation', 'Need this charcoal wash for morning labs'),
   ('11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222204', 'Desk Setup', 'Clean low-profile keycaps'),
   ('11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222207', 'Desk Setup', 'Best ambient lighting for late nights');
 
--- 5. SEED REVIEWS (So Person 2's "Recent Reviews" tab has verified reviews)
+-- 6. SEED REVIEWS (So Person 2's "Recent Reviews" tab has verified reviews)
 insert into public.reviews (user_id, product_id, rating, comment, verified_purchase)
 values
   (
@@ -175,7 +238,7 @@ values
     true
   );
 
--- 6. SEED COIN LEDGER HISTORY
+-- 7. SEED COIN LEDGER HISTORY
 insert into public.coin_transactions (user_id, amount, reason, description)
 values
   ('11111111-1111-1111-1111-111111111111', 180, 'promo_purchase', 'Earned from Arc''teryx Veilance Promo: Ripstop Crossbody Sling Bag'),

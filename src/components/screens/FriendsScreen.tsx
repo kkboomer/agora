@@ -4,28 +4,19 @@
 import { useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import BottomNav, { type NavTab } from '@/components/ui/BottomNav';
-
-const friends = [
-  { name: 'Maya Chen', tag: '@mayawears', initial: 'M', color: '#aa7058', note: '14 collections' },
-  { name: 'Alex Morgan', tag: '@alexm', initial: 'A', color: '#647277', note: '9 collections' },
-  { name: 'Sofia Reyes', tag: '@sofiar', initial: 'S', color: '#82715f', note: '22 collections' },
-  { name: 'Noah Williams', tag: '@noahw', initial: 'N', color: '#6e7562', note: '7 collections' },
-  { name: 'Camille Park', tag: '@camillep', initial: 'C', color: '#9a6d72', note: '11 collections' },
-];
-
-const img = (id: string, w: number) =>
-  `https://images.unsplash.com/photo-${id}?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=82&w=${w}`;
+import type { FriendWithCollections } from '@/types/types';
 
 interface Props {
   nav: NavTab;
   onNav: (tab: NavTab) => void;
+  friends: FriendWithCollections[];
   name: string;
   handle: string;
 }
 
-export default function FriendsScreen({ nav, onNav, name, handle }: Props) {
+export default function FriendsScreen({ nav, onNav, friends, name, handle }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
-  const friend = friends.find((f) => f.name === selected);
+  const friend = friends.find((f) => f.profile.id === selected);
 
   return (
     <main className="app-shell">
@@ -35,27 +26,20 @@ export default function FriendsScreen({ nav, onNav, name, handle }: Props) {
             <>
               <header className="friend-profile-header">
                 <button onClick={() => setSelected(null)} aria-label="Back to friends"><Icon name="back" /></button>
-                <div className="large-friend-avatar" style={{ background: friend.color }}>{friend.initial}</div>
-                <h1>{friend.name}</h1><p>{friend.tag}</p>
+                <div className="large-friend-avatar">{friend.profile.display_name[0]}</div>
+                <h1>{friend.profile.display_name}</h1><p>@{friend.profile.username}</p>
               </header>
-              <div className="friend-profile-title"><span>COLLECTIONS</span><h2>Saved by {friend.name.split(' ')[0]}</h2></div>
+              <div className="friend-profile-title"><span>COLLECTIONS</span><h2>Saved by {friend.profile.display_name.split(' ')[0]}</h2></div>
               <section className="collections-grid friend-collections">
-                <article className="collection-card">
-                  <div className="collection-cover favorites-cover">
-                    <img src={img('1613915617430-8ab0fd7c6baf', 400)} alt="" />
-                    <img src={img('1762605135012-56a59a059e60', 400)} alt="" />
-                    <span><Icon name="heart" size={18} filled /></span>
-                  </div>
-                  <h2>Liked items</h2><p>18 pieces</p>
-                </article>
-                <article className="collection-card">
-                  <div className="collection-cover"><img src={img('1692180142575-c31fcd106b5b', 500)} alt="" /></div>
-                  <h2>City layers</h2><p>12 pieces</p>
-                </article>
-                <article className="collection-card">
-                  <div className="collection-cover"><img src={img('1659522761084-79196b64abe4', 500)} alt="" /></div>
-                  <h2>For later</h2><p>7 pieces</p>
-                </article>
+                {friend.collections.map((collection) => (
+                  <article className="collection-card" key={collection.id}>
+                    <div className={`collection-cover ${collection.items.length > 1 ? 'split-cover' : ''}`}>
+                      {collection.items.slice(0, 2).map((item) => <img key={item.product.id} src={item.product.image_url} alt="" />)}
+                      {collection.name === 'Liked items' && <span><Icon name="heart" size={18} filled /></span>}
+                    </div>
+                    <h2>{collection.name}</h2><p>{collection.items.length} pieces</p>
+                  </article>
+                ))}
               </section>
             </>
           ) : (
@@ -67,9 +51,9 @@ export default function FriendsScreen({ nav, onNav, name, handle }: Props) {
               <div className="friends-heading"><div><span>FRIENDS</span><h2>Your circle</h2></div><small>{friends.length} friends</small></div>
               <section className="friends-list">
                 {friends.map((item) => (
-                  <button key={item.name} className="friend-row" onClick={() => setSelected(item.name)}>
-                    <span className="list-avatar" style={{ background: item.color }}>{item.initial}</span>
-                    <span className="friend-identity"><strong>{item.name}</strong><small>{item.tag} · {item.note}</small></span>
+                  <button key={item.profile.id} className="friend-row" onClick={() => setSelected(item.profile.id)}>
+                    <span className="list-avatar">{item.profile.display_name[0]}</span>
+                    <span className="friend-identity"><strong>{item.profile.display_name}</strong><small>@{item.profile.username} · {item.collections.length} collections</small></span>
                     <Icon name="arrow" size={18} />
                   </button>
                 ))}

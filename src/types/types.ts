@@ -35,6 +35,39 @@ export interface Product {
   created_at: string;
 }
 
+export interface Collection {
+  id: string;
+  user_id: string;
+  name: string;
+  is_public: boolean;
+  created_at: string;
+}
+
+export interface CollectionItem {
+  id: string;
+  collection_id: string;
+  product_id: string;
+  created_at: string;
+  product?: Product;
+}
+
+export interface CartItem {
+  id: string;
+  user_id: string;
+  product_id: string;
+  created_at: string;
+  product?: Product;
+}
+
+export interface FriendCollection extends Collection {
+  items: (CollectionItem & { product: Product })[];
+}
+
+export interface FriendWithCollections {
+  profile: UserProfile;
+  collections: FriendCollection[];
+}
+
 export interface SwipeRecord {
   id: string;
   user_id: string;
