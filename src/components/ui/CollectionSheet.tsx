@@ -14,12 +14,14 @@ interface Props {
   onClose: () => void;
   onToggle: (collectionId: string) => void;
   onCreate: (name: string, isPrivate: boolean) => void;
+  /** Guests can't make collections: tapping New collection calls this instead. */
+  onBlockedCreate?: () => void;
 }
 
 const coverOf = (c: Collection) => tilesOf(c)[0]?.item.image;
 
 /** Half-height sheet for adding an item to Liked, one of your collections, or a brand-new one. */
-export default function CollectionSheet({ item, collections, open, onClose, onToggle, onCreate }: Props) {
+export default function CollectionSheet({ item, collections, open, onClose, onToggle, onCreate, onBlockedCreate }: Props) {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const [isPrivate, setIsPrivate] = useState(true);
@@ -82,7 +84,7 @@ export default function CollectionSheet({ item, collections, open, onClose, onTo
           })}
 
           <li>
-            <button className="coll-row coll-new" onClick={() => setCreating(true)}>
+            <button className="coll-row coll-new" onClick={() => (onBlockedCreate ? onBlockedCreate() : setCreating(true))}>
               <span className="coll-thumb plus">
                 <Icon name="plus" size={20} />
               </span>

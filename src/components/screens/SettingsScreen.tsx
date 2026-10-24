@@ -20,9 +20,12 @@ interface Props {
   darkMode: boolean;
   onToggleDark: () => void;
   onLogout: () => void;
+  /** Not signed in: only dark mode, plus a way to log in. */
+  guest?: boolean;
+  onSignIn: () => void;
 }
 
-export default function SettingsScreen({ nav, onNav, onBack, name, handle, photo, onChangePhoto, onChangeName, darkMode, onToggleDark, onLogout }: Props) {
+export default function SettingsScreen({ nav, onNav, onBack, name, handle, photo, onChangePhoto, onChangeName, darkMode, onToggleDark, onLogout, guest = false, onSignIn }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
   const [confirmLogout, setConfirmLogout] = useState(false);
@@ -84,9 +87,9 @@ export default function SettingsScreen({ nav, onNav, onBack, name, handle, photo
           </header>
 
           <div className="settings-profile">
-            <button className="settings-avatar" onClick={openPhoto} aria-label="Edit profile photo">
+            <button className="settings-avatar" onClick={guest ? undefined : openPhoto} disabled={guest} aria-label={guest ? 'Profile photo' : 'Edit profile photo'}>
               {photo ? <img src={photo} alt="" referrerPolicy="no-referrer" /> : <Icon name="user" size={40} />}
-              <span className="avatar-edit"><Icon name="edit" size={14} /></span>
+              {!guest && <span className="avatar-edit"><Icon name="edit" size={14} /></span>}
             </button>
             <h2>{name}</h2>
             <p>{handle}</p>
@@ -107,15 +110,25 @@ export default function SettingsScreen({ nav, onNav, onBack, name, handle, photo
               </div>
             </li>
 
-            <li>
+            {guest && (
+              <li>
+                <button className="settings-row" onClick={onSignIn}>
+                  <span className="settings-icon"><Icon name="user" size={19} /></span>
+                  <span className="settings-label">Log in or sign up</span>
+                  <Icon name="arrow" size={16} />
+                </button>
+              </li>
+            )}
+
+            {!guest && <li>
               <button className="settings-row" onClick={openPhoto}>
                 <span className="settings-icon"><Icon name="user" size={19} /></span>
                 <span className="settings-label">Edit profile photo</span>
                 <Icon name="arrow" size={16} />
               </button>
-            </li>
+            </li>}
 
-            <li>
+            {!guest && <li>
               {editing ? (
                 <form
                   className="settings-row editing"
@@ -144,14 +157,14 @@ export default function SettingsScreen({ nav, onNav, onBack, name, handle, photo
                   <Icon name="arrow" size={16} />
                 </button>
               )}
-            </li>
+            </li>}
 
-            <li>
+            {!guest && <li>
               <button className="settings-row danger" onClick={() => setConfirmLogout(true)}>
                 <span className="settings-icon"><Icon name="logout" size={19} /></span>
                 <span className="settings-label">Log out</span>
               </button>
-            </li>
+            </li>}
           </ul>
         </div>
 

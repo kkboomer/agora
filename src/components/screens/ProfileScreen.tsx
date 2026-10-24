@@ -5,6 +5,7 @@ import { useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import Stars from '@/components/ui/Stars';
 import StarPicker from '@/components/ui/StarPicker';
+import SignInSheet from '@/components/ui/SignInSheet';
 import BottomSheet from '@/components/ui/BottomSheet';
 import BottomNav, { type NavTab } from '@/components/ui/BottomNav';
 import { findProduct } from '@/lib/discoverFeed';
@@ -21,13 +22,16 @@ interface Props {
   onCreateCollection: (name: string, isPrivate: boolean) => void;
   name: string;
   photo?: string | null;
+  /** Not signed in: collections, friends and reviews ask them to log in. */
+  guest?: boolean;
+  onSignIn: () => void;
   onOpenSettings: () => void;
   /** The signed-in user's reviews, keyed by item id. */
   myReviews: Record<string, Review>;
   onSaveReview: (itemId: string, rating: number, text: string) => void;
 }
 
-export default function ProfileScreen({ nav, onNav, collections, onOpenCollection, onCreateCollection, name, photo, onOpenSettings, myReviews, onSaveReview }: Props) {
+export default function ProfileScreen({ nav, onNav, collections, onOpenCollection, onCreateCollection, name, photo, guest = false, onSignIn, onOpenSettings, myReviews, onSaveReview }: Props) {
   const [profileTab, setProfileTab] = useState<'collections' | 'purchased'>('collections');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [rating, setRating] = useState(0);
@@ -49,7 +53,10 @@ export default function ProfileScreen({ nav, onNav, collections, onOpenCollectio
     setEditingId(null);
   };
 
+  const [prompt, setPrompt] = useState<string | null>(null);
+
   const openCreate = () => {
+    if (guest) return setPrompt('create collections');
     setNewName('');
     setNewPrivate(true);
     setCreating(true);
@@ -67,11 +74,11 @@ export default function ProfileScreen({ nav, onNav, collections, onOpenCollectio
         <div className="profile-scroll">
           <header className="profile-header">
             <div className="profile-avatar">{photo ? <img src={photo} alt="" referrerPolicy="no-referrer" /> : <Icon name="user" size={27} />}</div>
-            <div><p>YOUR PROFILE</p><h1>{name}</h1></div>
+            <div><p>{guest ? 'BROWSING AS' : 'YOUR PROFILE'}</p><h1>{name}</h1></div>
             <button aria-label="Profile settings" onClick={onOpenSettings}><Icon name="cog" size={20} /></button>
           </header>
 
-          <button className="my-friends-btn" onClick={() => onNav('gifts')}>
+          <button className="my-friends-btn" onClick={() => (guest ? setPrompt('see and add friends') : onNav('gifts'))}>
             <Icon name="userPlus" size={16} />My friends
           </button>
 
@@ -102,7 +109,14 @@ export default function ProfileScreen({ nav, onNav, collections, onOpenCollectio
             </section>
           ) : (
             <section className="purchased-list" aria-label="Purchased items">
-              {PURCHASES.length === 0 ? (
+              {guest ? (
+                <div className="saved-empty">
+                  <span><Icon name="gift" size={26} /></span>
+                  <h2>Log in to see purchases</h2>
+                  <p>Your orders and reviews live in your account.</p>
+                  <button onClick={onSignIn}>Log in / Sign up</button>
+                </div>
+              ) : PURCHASES.length === 0 ? (
                 <div className="saved-empty">
                   <span><Icon name="gift" size={26} /></span>
                   <h2>No purchases yet</h2>
@@ -215,6 +229,7 @@ export default function ProfileScreen({ nav, onNav, collections, onOpenCollectio
           </form>
         </BottomSheet>
 
+        <SignInSheet open={prompt !== null} onClose={() => setPrompt(null)} onSignIn={onSignIn} action={prompt ?? ''} />
         <BottomNav current={nav} onChange={onNav} variant="home" />
       </section>
     </main>

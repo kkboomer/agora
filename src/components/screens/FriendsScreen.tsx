@@ -27,14 +27,37 @@ interface Props {
   onOpenCart: () => void;
   isLiked: (itemId: string) => boolean;
   onToggleLike: (itemId: string) => void;
+  guest?: boolean;
+  onSignIn: () => void;
 }
 
-export default function FriendsScreen({ nav, onNav, name, handle, friends, onUnfriend, onAddFriend, onAddToCart, cartCount, onOpenCart, isLiked, onToggleLike }: Props) {
+export default function FriendsScreen({ nav, onNav, name, handle, friends, onUnfriend, onAddFriend, onAddToCart, cartCount, onOpenCart, isLiked, onToggleLike, guest = false, onSignIn }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const [friendTab, setFriendTab] = useState<'collections' | 'reviews'>('collections');
   const [viewing, setViewing] = useState<Collection | null>(null);
   const [confirmUnfriend, setConfirmUnfriend] = useState(false);
   const [finding, setFinding] = useState(false);
+  if (guest) {
+    return (
+      <main className="app-shell">
+        <section className="phone friends-screen" aria-label="Friends">
+          <div className="friends-scroll">
+            <header className="friends-header">
+              <div><p>YOUR CIRCLE</p><h1>Friends</h1></div>
+            </header>
+            <div className="saved-empty friends-signed-out">
+              <span><Icon name="userPlus" size={26} /></span>
+              <h2>Log in to see your friends</h2>
+              <p>Add friends, browse their collections and see what they’re into.</p>
+              <button onClick={onSignIn}>Log in / Sign up</button>
+            </div>
+          </div>
+          <BottomNav current={nav} onChange={onNav} variant="home" />
+        </section>
+      </main>
+    );
+  }
+
   const friend = friends.find((f) => f.name === selected);
   if (friend && viewing) {
     return (

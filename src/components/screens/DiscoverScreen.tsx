@@ -9,6 +9,7 @@ import BottomNav, { type NavTab } from '@/components/ui/BottomNav';
 import type { StyleFilter } from '@/components/screens/SearchScreen';
 import ReviewsSheet from '@/components/ui/ReviewsSheet';
 import type { Variant } from '@/components/ui/ProductSheet';
+import SignInSheet from '@/components/ui/SignInSheet';
 import CartSheet from '@/components/ui/CartSheet';
 import type { CartLine } from '@/components/screens/CartScreen';
 import CollectionSheet from '@/components/ui/CollectionSheet';
@@ -164,6 +165,8 @@ interface Props {
   productFilters: ProductFilters;
   onProductFilters: (filters: ProductFilters) => void;
   onSearch: (query: string) => void;
+  guest?: boolean;
+  onSignIn: () => void;
   onClearFilter: () => void;
 }
 
@@ -186,12 +189,15 @@ export default function DiscoverScreen({
   productFilters: filters,
   onProductFilters: setFilters,
   onSearch,
+  guest = false,
+  onSignIn,
   onClearFilter,
 }: Props) {
   const [index, setIndex] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
   const [cartOpen, setCartOpen] = useState(false);
+  const [signInPrompt, setSignInPrompt] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState('');
@@ -580,8 +586,11 @@ export default function DiscoverScreen({
           open={collectionsOpen}
           onClose={() => setCollectionsOpen(false)}
           onToggle={(cid) => onToggleCollection(cid, item.id)}
+          onBlockedCreate={guest ? () => setSignInPrompt(true) : undefined}
           onCreate={(name, isPrivate) => onCreateCollection(name, item.id, isPrivate)}
         />
+        {/* Last, so it stacks above the collections sheet it can be opened from. */}
+        <SignInSheet open={signInPrompt} onClose={() => setSignInPrompt(false)} onSignIn={onSignIn} action="create collections" />
       </section>
     </main>
   );

@@ -7,6 +7,7 @@ import HomeScreen from '@/components/screens/HomeScreen';
 import ProfileScreen from '@/components/screens/ProfileScreen';
 import FriendsScreen from '@/components/screens/FriendsScreen';
 import SettingsScreen from '@/components/screens/SettingsScreen';
+import AuthScreen from '@/components/screens/AuthScreen';
 import ProductScreen from '@/components/screens/ProductScreen';
 import CollectionScreen from '@/components/screens/CollectionScreen';
 import CartScreen from '@/components/screens/CartScreen';
@@ -20,6 +21,7 @@ import type { Variant } from '@/components/ui/ProductSheet';
 import { REVIEWS, type Review } from '@/lib/reviews';
 import { INITIAL_COLLECTIONS, LIKED_ID, type Collection } from '@/lib/collections';
 import { cartItemIdFor, sortLikedFirst, toUiCollection, toUiFriend } from '@/lib/accountMapping';
+import { currentUser, signIn, signOut, signUp, type AuthUser } from '@/lib/supabase/auth';
 import { fetchAvatar, fetchCartItems, fetchCollections, fetchFriendsWithCollections, recordSwipe, removeAvatar, removeFromCart, toggleLikedItem, uploadAvatar } from '@/lib/supabase/api';
 import { DEMO_USER_ID, isSupabaseConfigured } from '@/lib/supabase/client';
 
@@ -32,6 +34,8 @@ interface CartEntry {
   color?: string;
   size?: string;
 }
+
+const GUEST_LIKED_KEY = 'agora.guestLiked';
 
 export default function AgoraApp() {
   const [nav, setNav] = useState<NavTab>('discover');
@@ -50,14 +54,80 @@ export default function AgoraApp() {
   const [discountCode, setDiscountCode] = useState<string | null>(null);
   const [userName, setUserName] = useState('Alex Rivera');
   const [darkMode, setDarkMode] = useState(false);
-  const userHandle = '@alex_cal';
+  const [userHandle, setUserHandle] = useState('@alex_cal');
+  // null until the person logs in, signs up or continues as a guest.
+  const [session, setSession] = useState<'member' | 'guest' | null>(null);
+  // Whose data to load and save: the signed-in account, or the shared demo account for guests.
+  const [userId, setUserId] = useState(DEMO_USER_ID);
+  // Guests browse with local data only: nothing is read from or written to the database.
+  const signedIn = session === 'member';
+  // False until we've checked for a saved login, so a returning user doesn't see the login screen flash.
+  const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
 
   // What "logging out" resets to: the mock data, or the account's data once Supabase has loaded it.
   const baseline = useRef<{ collections: Collection[]; friends: Friend[] }>({ collections: INITIAL_COLLECTIONS, friends: INITIAL_FRIENDS });
 
-  // Load the demo account from Supabase. If it isn't configured (or comes back empty) the mock data stays.
+  // A brand-new account starts empty, not with the mock collections and friends.
+  const applyAccount = (user: AuthUser) => {
+    const empty: Collection[] = [{ id: LIKED_ID, name: 'Liked items', isPrivate: true, pieces: [], itemIds: [] }];
+    baseline.current = { collections: empty, friends: [] };
+    setCollections(empty);
+    setFriends([]);
+    setCart([]);
+    setMyReviews({});
+    setUserId(user.id);
+    setUserName(user.name);
+    setUserHandle(user.handle);
+    setUserPhoto(user.avatarUrl);
+    setNav('discover');
+    setOverlay(null);
+    setSession('member');
+  };
+
+  // Guests get only their locally saved liked items, kept in this browser.
+  const applyGuest = () => {
+    let liked: string[] = [];
+    try {
+      liked = JSON.parse(localStorage.getItem(GUEST_LIKED_KEY) ?? '[]').filter((id: unknown) => typeof id === 'string' && findProduct(id));
+    } catch {
+      // Storage unavailable or corrupt: start empty.
+    }
+    const likedOnly: Collection[] = [{ id: LIKED_ID, name: 'Liked items', isPrivate: true, pieces: [], itemIds: liked }];
+    baseline.current = { collections: likedOnly, friends: [] };
+    setCollections(likedOnly);
+    setFriends([]);
+    setCart([]);
+    setMyReviews({});
+    setUserId(DEMO_USER_ID);
+    setUserName('Guest');
+    setUserHandle('Not signed in');
+    setUserPhoto(null);
+    setNav('discover');
+    setOverlay(null);
+    setSession('guest');
+  };
   useEffect(() => {
-    Promise.all([fetchCartItems(DEMO_USER_ID), fetchCollections(DEMO_USER_ID), fetchFriendsWithCollections(DEMO_USER_ID)])
+    if (session !== 'guest') return;
+    const liked = collections.find((c) => c.id === LIKED_ID)?.itemIds ?? [];
+    try {
+      localStorage.setItem(GUEST_LIKED_KEY, JSON.stringify(liked));
+    } catch {
+      // Storage unavailable: likes just last for this visit.
+    }
+  }, [session, collections]);
+
+  // Pick up a saved login on first load.
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    currentUser()
+      .then((user) => user && applyAccount(user))
+      .finally(() => setAuthReady(true));
+  }, []);
+
+  // Load the account from Supabase once someone is in. If it isn't configured (or comes back empty) the starting data stays.
+  useEffect(() => {
+    if (session !== 'member') return;
+    Promise.all([fetchCartItems(userId), fetchCollections(userId), fetchFriendsWithCollections(userId)])
       .then(([cartRows, accountCollections, accountFriends]) => {
         const cartEntries = cartRows.flatMap((row) => {
           const id = cartItemIdFor(row.product_id);
@@ -77,8 +147,8 @@ export default function AgoraApp() {
         }
       })
       .catch((error) => console.error('Error loading demo account:', error));
-    fetchAvatar(DEMO_USER_ID).then((url) => url && setUserPhoto(url));
-  }, []);
+    if (userId === DEMO_USER_ID) fetchAvatar(userId).then((url) => url && setUserPhoto(url));
+  }, [session, userId]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = darkMode ? 'dark' : 'light';
@@ -104,7 +174,7 @@ export default function AgoraApp() {
     // Removing the last line for a product also removes it from the saved cart.
     if (entry && delta === -1 && entry.qty <= 1 && !cart.some((e) => e.id === entry.id && e.key !== key)) {
       const productId = findProduct(entry.id)?.productId;
-      if (productId) await removeFromCart(productId, DEMO_USER_ID);
+      if (productId && signedIn) await removeFromCart(productId, userId);
     }
     setCart((c) => c.flatMap((e) => (e.key !== key ? [e] : e.qty + delta <= 0 ? [] : [{ ...e, qty: e.qty + delta }])));
   };
@@ -130,7 +200,7 @@ export default function AgoraApp() {
   const toggleInCollection = async (collectionId: string, itemId: string) => {
     if (collectionId === LIKED_ID) {
       const productId = findProduct(itemId)?.productId;
-      if (productId && !(await toggleLikedItem(productId, DEMO_USER_ID))) return;
+      if (productId && signedIn && !(await toggleLikedItem(productId, userId))) return;
     }
     setCollections((cs) =>
       cs.map((c) =>
@@ -166,7 +236,7 @@ export default function AgoraApp() {
   // Photos are saved to Supabase as a webp link. Without Supabase they just live in this session.
   const changePhoto = async (image: Blob | null) => {
     if (!image) {
-      if (!(await removeAvatar(DEMO_USER_ID))) return false;
+      if (!(await removeAvatar(userId))) return false;
       setUserPhoto(null);
       return true;
     }
@@ -174,10 +244,16 @@ export default function AgoraApp() {
       setUserPhoto(URL.createObjectURL(image));
       return true;
     }
-    const url = await uploadAvatar(image, DEMO_USER_ID);
+    const url = await uploadAvatar(image, userId);
     if (!url) return false;
     setUserPhoto(url);
     return true;
+  };
+
+  // Guests are sent back to the login screen. Their local likes are kept.
+  const goToSignIn = () => {
+    setOverlay(null);
+    setSession(null);
   };
 
   const goTo = (tab: NavTab) => {
@@ -190,15 +266,15 @@ export default function AgoraApp() {
   };
   const handleSwipe = async (intent: SwipeIntent, id: string, variant?: Variant) => {
     const productId = findProduct(id)?.productId;
-    if (productId) {
-      const persisted = await recordSwipe(productId, intent === 'reject' ? 'left' : 'right', DEMO_USER_ID, intent === 'cart');
+    if (productId && signedIn) {
+      const persisted = await recordSwipe(productId, intent === 'reject' ? 'left' : 'right', userId, intent === 'cart');
       if (!persisted) return;
     }
 
     if (intent === 'like') {
       const alreadyLiked = collections.some((c) => c.id === LIKED_ID && c.itemIds.includes(id));
       if (alreadyLiked) return;
-      if (productId && !(await toggleLikedItem(productId, DEMO_USER_ID))) return;
+      if (productId && signedIn && !(await toggleLikedItem(productId, userId))) return;
       setCollections((cs) => cs.map((c) => (c.id === LIKED_ID && !c.itemIds.includes(id) ? { ...c, itemIds: [...c.itemIds, id] } : c)));
     }
     if (intent === 'cart') addToCart(id, variant);
@@ -221,7 +297,12 @@ export default function AgoraApp() {
     setDiscountCode(null);
     setFilter(null);
     setUserName('Alex Rivera');
+    setUserHandle('@alex_cal');
+    setUserPhoto(null);
+    setUserId(DEMO_USER_ID);
     goTo('discover');
+    setSession(null);
+    signOut();
   };
 
   const renderScreen = () => {
@@ -281,6 +362,8 @@ export default function AgoraApp() {
           darkMode={darkMode}
           onToggleDark={() => setDarkMode((v) => !v)}
           onLogout={handleLogout}
+          guest={!signedIn}
+          onSignIn={goToSignIn}
         />
       );
     }
@@ -319,6 +402,8 @@ export default function AgoraApp() {
       case 'profile':
         return (
           <ProfileScreen
+            guest={!signedIn}
+            onSignIn={goToSignIn}
             nav={nav}
             onNav={goTo}
             collections={collections}
@@ -333,6 +418,8 @@ export default function AgoraApp() {
         );
       case 'gifts':
         return <FriendsScreen
+            guest={!signedIn}
+            onSignIn={goToSignIn}
             nav={nav}
             onNav={goTo}
             name={userName}
@@ -349,6 +436,8 @@ export default function AgoraApp() {
       default:
         return (
           <DiscoverScreen
+            guest={!signedIn}
+            onSignIn={goToSignIn}
             nav={nav}
             onNav={goTo}
             feedTab={feedTab}
@@ -374,6 +463,40 @@ export default function AgoraApp() {
   };
 
   const devScreen: DevScreen = overlay === 'collection' ? 'profile' : overlay === 'product' ? 'home' : overlay ?? (nav === 'closet' ? 'search' : (nav as DevScreen));
+
+  if (!authReady) return null;
+
+  if (!session) {
+    // Real sign-in when Supabase is configured; otherwise straight in with the demo account.
+    const enter = async (error: string | null) => {
+      if (error) return error;
+      if (!isSupabaseConfigured) {
+        setSession('member');
+        return null;
+      }
+      const user = await currentUser();
+      if (!user) return 'Couldn’t load your account. Try again.';
+      applyAccount(user);
+      return null;
+    };
+    return (
+      <AuthScreen
+        onLogin={async (identifier, password) => enter(await signIn(identifier, password))}
+        onSignUp={async (details) => {
+          const error = await signUp(details);
+          if (error || !isSupabaseConfigured) {
+            if (!error) {
+              setUserName(details.name);
+              setUserHandle(`@${details.username}`);
+            }
+            return enter(error);
+          }
+          return enter(null);
+        }}
+        onGuest={applyGuest}
+      />
+    );
+  }
 
   return (
     <>
