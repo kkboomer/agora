@@ -35,6 +35,45 @@ create table public.products (
   created_at timestamptz not null default now()
 );
 
+-- COLLECTIONS TABLE (Every user has a default Liked items collection)
+create table public.collections (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  name text not null,
+  is_public boolean not null default false,
+  created_at timestamptz not null default now(),
+  unique(user_id, name)
+);
+
+-- COLLECTION ITEMS TABLE
+create table public.collection_items (
+  id uuid primary key default gen_random_uuid(),
+  collection_id uuid not null references public.collections(id) on delete cascade,
+  product_id uuid not null references public.products(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique(collection_id, product_id)
+);
+
+-- FRIENDSHIPS TABLE
+create table public.friendships (
+  id uuid primary key default gen_random_uuid(),
+  requester_id uuid not null references public.profiles(id) on delete cascade,
+  addressee_id uuid not null references public.profiles(id) on delete cascade,
+  status text not null default 'accepted' check (status in ('pending', 'accepted', 'blocked')),
+  created_at timestamptz not null default now(),
+  unique(requester_id, addressee_id),
+  check (requester_id <> addressee_id)
+);
+
+-- CART ITEMS TABLE
+create table public.cart_items (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  product_id uuid not null references public.products(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique(user_id, product_id)
+);
+
 -- SWIPES & CART TABLE
 -- Tracks every left/right swipe AND acts as the active shopping cart when cart_status = 'in_cart'
 create table public.swipes (
@@ -120,9 +159,11 @@ begin
     insert into public.purchases (user_id, product_id, price_paid, coins_earned, is_public)
     values (p_user_id, v_prod.id, v_prod.price, v_prod.coin_reward, true);
 
-    -- 2. Mark swipe row as 'purchased' so it leaves the active cart
+    -- 2. Mark swipe history and the active cart row as purchased
     update public.swipes
     set cart_status = 'purchased'
+    where user_id = p_user_id and product_id = v_prod.id;
+    delete from public.cart_items
     where user_id = p_user_id and product_id = v_prod.id;
 
     -- 3. Accumulate totals

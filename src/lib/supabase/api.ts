@@ -4,13 +4,15 @@ import {
   Product,
   UserProfile,
   SwipeDirection,
-  SwipeRecord,
   PublicProfileData,
   CheckoutResult,
   CheckinResult,
   Pin,
   Review,
   CoinTransaction,
+  CartItem,
+  Collection,
+  FriendWithCollections,
 } from '../../types/types';
 
 // =========================================================
@@ -56,7 +58,8 @@ export async function fetchSwipeDeck(userId: string = DEMO_USER_ID): Promise<Pro
 export async function recordSwipe(
   productId: string,
   direction: SwipeDirection,
-  userId: string = DEMO_USER_ID
+  userId: string = DEMO_USER_ID,
+  addToCart = direction === 'right'
 ): Promise<boolean> {
   if (!isSupabaseConfigured) return true;
 
@@ -65,10 +68,18 @@ export async function recordSwipe(
       user_id: userId,
       product_id: productId,
       direction,
-      cart_status: direction === 'right' ? 'in_cart' : 'passed',
+      cart_status: addToCart ? 'in_cart' : 'passed',
     },
     { onConflict: 'user_id,product_id' }
   );
+
+  if (!error && addToCart) {
+    const { error: cartError } = await supabase
+      .from('cart_items')
+      .upsert({ user_id: userId, product_id: productId }, { onConflict: 'user_id,product_id' });
+    if (cartError) console.error('Error adding product to cart:', cartError);
+    return !cartError;
+  }
 
   if (error) console.error('Error recording swipe:', error);
   return !error;
@@ -79,18 +90,17 @@ export async function recordSwipe(
  */
 export async function fetchCartItems(
   userId: string = DEMO_USER_ID
-): Promise<(SwipeRecord & { product: Product })[]> {
+): Promise<(CartItem & { product: Product })[]> {
   if (!isSupabaseConfigured) return [];
 
   const { data, error } = await supabase
-    .from('swipes')
+    .from('cart_items')
     .select('*, product:products(*)')
     .eq('user_id', userId)
-    .eq('cart_status', 'in_cart')
     .order('created_at', { ascending: false });
 
   if (error || !data) return [];
-  return data as (SwipeRecord & { product: Product })[];
+  return data as (CartItem & { product: Product })[];
 }
 
 /**
@@ -103,12 +113,95 @@ export async function removeFromCart(
   if (!isSupabaseConfigured) return true;
 
   const { error } = await supabase
-    .from('swipes')
-    .update({ cart_status: 'removed' })
+    .from('cart_items')
+    .delete()
     .eq('user_id', userId)
     .eq('product_id', productId);
 
   return !error;
+}
+
+export async function fetchCollections(
+  userId: string = DEMO_USER_ID
+): Promise<(Collection & { items: { product: Product }[] })[]> {
+  if (!isSupabaseConfigured) return [];
+
+  const { data, error } = await supabase
+    .from('collections')
+    .select('*, items:collection_items(*, product:products(*))')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true });
+
+  if (error || !data) {
+    console.error('Error fetching collections:', error);
+    return [];
+  }
+  return data as (Collection & { items: { product: Product }[] })[];
+}
+
+export async function toggleLikedItem(
+  productId: string,
+  userId: string = DEMO_USER_ID
+): Promise<boolean> {
+  if (!isSupabaseConfigured) return true;
+
+  const { data: collection, error: collectionError } = await supabase
+    .from('collections')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('name', 'Liked items')
+    .single();
+
+  if (collectionError || !collection) {
+    console.error('Error finding liked items collection:', collectionError);
+    return false;
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from('collection_items')
+    .select('id')
+    .eq('collection_id', collection.id)
+    .eq('product_id', productId)
+    .maybeSingle();
+
+  if (existingError) return false;
+  const result = existing
+    ? await supabase.from('collection_items').delete().eq('id', existing.id)
+    : await supabase.from('collection_items').insert({ collection_id: collection.id, product_id: productId });
+  return !result.error;
+}
+
+export async function fetchFriendsWithCollections(
+  userId: string = DEMO_USER_ID
+): Promise<FriendWithCollections[]> {
+  if (!isSupabaseConfigured) return [];
+
+  const { data: friendships, error: friendshipError } = await supabase
+    .from('friendships')
+    .select('requester_id, addressee_id')
+    .eq('status', 'accepted')
+    .or(`requester_id.eq.${userId},addressee_id.eq.${userId}`);
+  if (friendshipError || !friendships) return [];
+
+  const friendIds = friendships.map((friendship) =>
+    friendship.requester_id === userId ? friendship.addressee_id : friendship.requester_id
+  );
+  if (!friendIds.length) return [];
+
+  const [{ data: profiles }, { data: collections }] = await Promise.all([
+    supabase.from('profiles').select('*').in('id', friendIds),
+    supabase
+      .from('collections')
+      .select('*, items:collection_items(*, product:products(*))')
+      .in('user_id', friendIds)
+      .eq('is_public', true)
+      .order('created_at', { ascending: true }),
+  ]);
+
+  return (profiles || []).map((profile) => ({
+    profile: profile as FriendWithCollections['profile'],
+    collections: ((collections || []).filter((collection) => collection.user_id === profile.id) as FriendWithCollections['collections']),
+  }));
 }
 
 /**

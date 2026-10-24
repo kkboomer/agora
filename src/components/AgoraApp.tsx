@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { NavTab } from '@/components/ui/BottomNav';
 import DiscoverScreen from '@/components/screens/DiscoverScreen';
 import HomeScreen from '@/components/screens/HomeScreen';
@@ -9,14 +9,28 @@ import FriendsScreen from '@/components/screens/FriendsScreen';
 import SearchScreen, { type StyleFilter } from '@/components/screens/SearchScreen';
 import type { SwipeIntent } from '@/components/screens/DiscoverScreen';
 import { DISCOVER_ITEMS } from '@/lib/discoverFeed';
+import { fetchCartItems, fetchCollections, fetchFriendsWithCollections, recordSwipe, toggleLikedItem } from '@/lib/supabase/api';
+import { DEMO_USER_ID } from '@/lib/supabase/client';
+import type { Collection, FriendWithCollections, Product } from '@/types/types';
 
 export default function AgoraApp() {
   const [nav, setNav] = useState<NavTab>('discover');
   const [searching, setSearching] = useState(false);
   const [filter, setFilter] = useState<StyleFilter | null>(null);
   const [savedIds, setSavedIds] = useState<string[]>([]);
-  const [likedIds, setLikedIds] = useState<string[]>([]);
-  const [cartCount, setCartCount] = useState(2); // mock starting count until a real cart exists
+  const [cartCount, setCartCount] = useState(0);
+  const [collections, setCollections] = useState<(Collection & { items: { product: Product }[] })[]>([]);
+  const [friends, setFriends] = useState<FriendWithCollections[]>([]);
+
+  useEffect(() => {
+    Promise.all([fetchCartItems(DEMO_USER_ID), fetchCollections(DEMO_USER_ID), fetchFriendsWithCollections(DEMO_USER_ID)])
+      .then(([cart, accountCollections, accountFriends]) => {
+        setCartCount(cart.length);
+        setCollections(accountCollections);
+        setFriends(accountFriends);
+      })
+      .catch((error) => console.error('Error loading demo account:', error));
+  }, []);
 
   const goTo = (tab: NavTab) => {
     if (tab === 'closet') {
@@ -26,8 +40,16 @@ export default function AgoraApp() {
     setSearching(false);
     setNav(tab);
   };
-  const handleSwipe = (intent: SwipeIntent, id: string) => {
-    if (intent === 'like') setLikedIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
+  const handleSwipe = async (intent: SwipeIntent, id: string) => {
+    const item = DISCOVER_ITEMS.find((discoverItem) => discoverItem.id === id);
+    if (!item) return;
+    const persisted = await recordSwipe(item.productId, intent === 'reject' ? 'left' : 'right', DEMO_USER_ID, intent === 'cart');
+    if (!persisted) return;
+    if (intent === 'like') {
+      const liked = await toggleLikedItem(item.productId);
+      if (!liked) return;
+      setCollections(await fetchCollections(DEMO_USER_ID));
+    }
     if (intent === 'cart') setCartCount((n) => n + 1);
   };
   const openSearch = () => setSearching(true);
@@ -55,9 +77,9 @@ export default function AgoraApp() {
     case 'home':
       return <HomeScreen nav={nav} onNav={goTo} onOpenSearch={openSearch} onSearch={runSearch} cartCount={cartCount} />;
     case 'profile':
-      return <ProfileScreen nav={nav} onNav={goTo} savedItems={DISCOVER_ITEMS.filter((i) => savedIds.includes(i.id))} likedCount={likedIds.length} />;
+      return <ProfileScreen nav={nav} onNav={goTo} savedItems={DISCOVER_ITEMS.filter((i) => savedIds.includes(i.id))} collections={collections} />;
     case 'gifts':
-      return <FriendsScreen nav={nav} onNav={goTo} />;
+      return <FriendsScreen nav={nav} onNav={goTo} friends={friends} />;
     default:
       return (
         <DiscoverScreen
