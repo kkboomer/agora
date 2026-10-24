@@ -6,7 +6,8 @@ import Icon from '@/components/ui/Icon';
 import BottomSheet from '@/components/ui/BottomSheet';
 import BottomNav, { type NavTab } from '@/components/ui/BottomNav';
 import { LIKED_ID, collectionCount, tilesOf, type Collection } from '@/lib/collections';
-import ProductSheet, { type Variant } from '@/components/ui/ProductSheet';
+import ProductScreen from '@/components/screens/ProductScreen';
+import { type Variant } from '@/components/ui/ProductSheet';
 import type { DiscoverItem } from '@/lib/discoverFeed';
 
 interface Props {
@@ -20,15 +21,18 @@ interface Props {
   readOnly?: boolean;
   ownerName?: string;
   onAddToCart: (itemId: string, variant: Variant) => void;
+  cartCount: number;
+  onOpenCart: () => void;
+  isLiked: (itemId: string) => boolean;
+  onToggleLike: (itemId: string) => void;
 }
 
-export default function CollectionScreen({ nav, onNav, onBack, collection, onUpdate, onDelete, readOnly = false, ownerName, onAddToCart }: Props) {
+export default function CollectionScreen({ nav, onNav, onBack, collection, onUpdate, onDelete, readOnly = false, ownerName, onAddToCart, cartCount, onOpenCart, isLiked, onToggleLike }: Props) {
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(collection.name);
   const [draftPrivate, setDraftPrivate] = useState(collection.isPrivate);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [product, setProduct] = useState<DiscoverItem | null>(null);
-  const [productOpen, setProductOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const builtIn = collection.id === LIKED_ID;
@@ -71,6 +75,24 @@ export default function CollectionScreen({ nav, onNav, onBack, collection, onUpd
     }
   };
 
+  // A tapped piece opens as its own full screen; back returns to this collection.
+  if (product) {
+    return (
+      <ProductScreen
+        key={product.id}
+        nav={nav}
+        onNav={onNav}
+        onBack={() => setProduct(null)}
+        item={product}
+        cartCount={cartCount}
+        onOpenCart={onOpenCart}
+        liked={isLiked(product.id)}
+        onToggleLike={() => onToggleLike(product.id)}
+        onAddToCart={(variant) => onAddToCart(product.id, variant)}
+      />
+    );
+  }
+
   return (
     <main className="app-shell">
       <section className="phone collection-screen" aria-label={collection.name}>
@@ -105,7 +127,6 @@ export default function CollectionScreen({ nav, onNav, onBack, collection, onUpd
                       aria-label={`View ${t.item.title}`}
                       onClick={() => {
                         setProduct(t.item);
-                        setProductOpen(true);
                       }}
                     >
                       <img src={t.item.image} alt="" style={{ aspectRatio: t.ratio, objectPosition: t.item.focus }} />
@@ -173,20 +194,6 @@ export default function CollectionScreen({ nav, onNav, onBack, collection, onUpd
             )}
           </div>
         </BottomSheet>
-        )}
-
-        {product && (
-          <ProductSheet
-            key={product.id}
-            item={product}
-            open={productOpen}
-            onClose={() => setProductOpen(false)}
-            onAddToCart={(variant) => {
-              onAddToCart(product.id, variant);
-              setProductOpen(false);
-              flash('Added to cart');
-            }}
-          />
         )}
 
         <BottomNav current={nav} onChange={onNav} variant="home" />

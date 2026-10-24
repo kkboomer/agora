@@ -14,6 +14,9 @@ export interface DiscoverItem {
   colors?: number;
   colorOptions: ColorOption[];
   sizes: string[];
+  /** Filterable attributes (see lib/filters.ts). */
+  style?: string;
+  fit?: string;
   image: string;
   alt: string;
   /** CSS object-position so the subject stays framed in the tall phone crop */
@@ -26,9 +29,11 @@ const photo = (id: string) =>
 const APPAREL_SIZES = ['XS', 'S', 'M', 'L', 'XL'];
 
 // Mock feed until this is wired to Supabase products.
-export const DISCOVER_ITEMS: DiscoverItem[] = [
+const FEATURED_ITEMS: DiscoverItem[] = [
   {
     id: 'atelier-signature-coat',
+    style: 'Classic',
+    fit: 'Relaxed',
     productId: '22222222-2222-2222-2222-222222222201',
     brand: 'ATELIER N°7',
     title: 'The Signature Wool Coat',
@@ -48,6 +53,8 @@ export const DISCOVER_ITEMS: DiscoverItem[] = [
   },
   {
     id: 'lewkin-nayela-jeans',
+    style: 'Vintage',
+    fit: 'Relaxed',
     productId: '22222222-2222-2222-2222-222222222205',
     brand: 'LEWKIN',
     title: 'Nayela Vintage Wide Leg Jeans',
@@ -65,10 +72,12 @@ export const DISCOVER_ITEMS: DiscoverItem[] = [
   },
 ];
 
-// Extra mock products that appear in collections (not in the Discover feed yet).
+// More mock products. They follow the featured pair in the Discover feed.
 const EXTRA_ITEMS: DiscoverItem[] = [
   {
     id: 'frankie-oversized-tailoring',
+    style: 'Minimal',
+    fit: 'Oversized',
     brand: 'THE FRANKIE SHOP',
     title: 'Oversized tailoring',
     description: 'Relaxed neutral blazer with matching trousers',
@@ -81,6 +90,8 @@ const EXTRA_ITEMS: DiscoverItem[] = [
   },
   {
     id: 'nicholson-volume-jacket',
+    style: 'Statement',
+    fit: 'Oversized',
     brand: 'STUDIO NICHOLSON',
     title: 'Volume Jacket',
     description: 'Statement jacket with a sculpted, boxy shape',
@@ -93,6 +104,8 @@ const EXTRA_ITEMS: DiscoverItem[] = [
   },
   {
     id: 'everyday-trench',
+    style: 'Classic',
+    fit: 'Regular',
     brand: 'MAYA’S PICK',
     title: 'Everyday Trench',
     description: 'Classic belted trench for every season',
@@ -105,6 +118,8 @@ const EXTRA_ITEMS: DiscoverItem[] = [
   },
   {
     id: 'sculpted-midi',
+    style: 'Minimal',
+    fit: 'Slim',
     brand: 'ALEX’S PICK',
     title: 'Sculpted Midi',
     description: 'Minimal midi dress with a sculpted waist',
@@ -117,6 +132,17 @@ const EXTRA_ITEMS: DiscoverItem[] = [
   },
 ];
 
-/** Every product the app knows about (the Discover feed plus items that only appear in collections). */
-export const CATALOG: DiscoverItem[] = [...DISCOVER_ITEMS, ...EXTRA_ITEMS];
+const byId = (id: string) => EXTRA_ITEMS.find((i) => i.id === id)!;
+
+/** The swipe deck: the featured pair, then the jacket, tailoring, trench and midi. */
+export const DISCOVER_ITEMS: DiscoverItem[] = [
+  ...FEATURED_ITEMS,
+  byId('nicholson-volume-jacket'),
+  byId('frankie-oversized-tailoring'),
+  byId('everyday-trench'),
+  byId('sculpted-midi'),
+];
+
+/** Every product the app knows about. */
+export const CATALOG: DiscoverItem[] = DISCOVER_ITEMS;
 export const findProduct = (id: string) => CATALOG.find((i) => i.id === id);

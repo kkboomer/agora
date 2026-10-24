@@ -20,13 +20,14 @@ interface Props {
   onOpenCollection: (id: string) => void;
   onCreateCollection: (name: string, isPrivate: boolean) => void;
   name: string;
+  photo?: string | null;
   onOpenSettings: () => void;
   /** The signed-in user's reviews, keyed by item id. */
   myReviews: Record<string, Review>;
   onSaveReview: (itemId: string, rating: number, text: string) => void;
 }
 
-export default function ProfileScreen({ nav, onNav, collections, onOpenCollection, onCreateCollection, name, onOpenSettings, myReviews, onSaveReview }: Props) {
+export default function ProfileScreen({ nav, onNav, collections, onOpenCollection, onCreateCollection, name, photo, onOpenSettings, myReviews, onSaveReview }: Props) {
   const [profileTab, setProfileTab] = useState<'collections' | 'purchased'>('collections');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [rating, setRating] = useState(0);
@@ -36,13 +37,14 @@ export default function ProfileScreen({ nav, onNav, collections, onOpenCollectio
   const [newPrivate, setNewPrivate] = useState(true);
 
   const startReview = (itemId: string) => {
-    const existing = myReviews[itemId];
-    setRating(existing?.rating ?? 0);
-    setText(existing?.text ?? '');
+    // A posted review is final.
+    if (myReviews[itemId]) return;
+    setRating(0);
+    setText('');
     setEditingId(itemId);
   };
   const postReview = (itemId: string) => {
-    if (!rating) return;
+    if (!rating || myReviews[itemId]) return;
     onSaveReview(itemId, rating, text.trim());
     setEditingId(null);
   };
@@ -64,10 +66,14 @@ export default function ProfileScreen({ nav, onNav, collections, onOpenCollectio
       <section className="phone profile-screen" aria-label="Profile">
         <div className="profile-scroll">
           <header className="profile-header">
-            <div className="profile-avatar"><Icon name="user" size={27} /></div>
+            <div className="profile-avatar">{photo ? <img src={photo} alt="" referrerPolicy="no-referrer" /> : <Icon name="user" size={27} />}</div>
             <div><p>YOUR PROFILE</p><h1>{name}</h1></div>
             <button aria-label="Profile settings" onClick={onOpenSettings}><Icon name="cog" size={20} /></button>
           </header>
+
+          <button className="my-friends-btn" onClick={() => onNav('gifts')}>
+            <Icon name="userPlus" size={16} />My friends
+          </button>
 
           <div className="profile-tabs" role="tablist">
             <button role="tab" aria-selected={profileTab === 'collections'} className={profileTab === 'collections' ? 'active' : ''} onClick={() => setProfileTab('collections')}>Collections</button>
@@ -138,6 +144,7 @@ export default function ProfileScreen({ nav, onNav, collections, onOpenCollectio
                             rows={3}
                             maxLength={400}
                           />
+                          <p className="composer-note">Reviews can’t be edited once posted.</p>
                           <div className="composer-actions">
                             <button type="button" className="pill-btn ghost" onClick={() => setEditingId(null)}>Cancel</button>
                             <button type="submit" className="pill-btn" disabled={!rating}>{mine ? 'Update' : 'Post'}</button>
@@ -147,7 +154,6 @@ export default function ProfileScreen({ nav, onNav, collections, onOpenCollectio
                         <div className="my-review">
                           <div className="my-review-head">
                             <span>Your review</span>
-                            <button onClick={() => startReview(item.id)}>Edit</button>
                           </div>
                           <Stars rating={mine.rating} size={15} />
                           {mine.text && <p>{mine.text}</p>}

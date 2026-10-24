@@ -1,22 +1,26 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
-import { animate, motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
+import { AnimatePresence, animate, motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import Icon from '@/components/ui/Icon';
 import BottomNav, { type NavTab } from '@/components/ui/BottomNav';
 import type { StyleFilter } from '@/components/screens/SearchScreen';
 import ReviewsSheet from '@/components/ui/ReviewsSheet';
+import type { Variant } from '@/components/ui/ProductSheet';
+import CartSheet from '@/components/ui/CartSheet';
+import type { CartLine } from '@/components/screens/CartScreen';
 import CollectionSheet from '@/components/ui/CollectionSheet';
 import type { Collection } from '@/lib/collections';
 import { reviewsFor, type Review } from '@/lib/reviews';
 import { DISCOVER_ITEMS, type DiscoverItem } from '@/lib/discoverFeed';
+import FilterSheet from '@/components/ui/FilterSheet';
+import { activeFilterCount, matchesFilters, type ProductFilters } from '@/lib/filters';
 
 export type SwipeIntent = 'like' | 'reject' | 'cart';
 
-const filterLabel = (f: StyleFilter) =>
-  f.query ? `“${f.query}”` : `${f.gender === 'men' ? 'Men’s' : 'Women’s'} ${f.category}`;
+const filterLabel = (f: StyleFilter) => (f.query ? `“${f.query}”` : `${f.gender === 'men' ? 'Men’s' : 'Women’s'} ${f.category}`);
 
 export const FEED_TABS = ['Trending', 'For You', 'Friends', 'Discover'] as const;
 export type FeedTab = (typeof FEED_TABS)[number];
@@ -35,12 +39,26 @@ function readIntent(x: number, y: number): DragState {
   const ax = Math.abs(x);
   const ay = Math.abs(y);
   if (ax < 8 && ay < 8) return IDLE;
-  if (ax >= ay) return { intent: x > 0 ? 'like' : 'reject', strength: Math.min(ax / THRESHOLD, 1) };
+  if (ax >= ay)
+    return {
+      intent: x > 0 ? 'like' : 'reject',
+      strength: Math.min(ax / THRESHOLD, 1),
+    };
   // Vertical drags, up or down, add to cart.
   return { intent: 'cart', strength: Math.min(ay / THRESHOLD, 1) };
 }
 
-function CardFace({ item, filter }: { item: DiscoverItem; filter: StyleFilter | null }) {
+interface OptionsState {
+  open: boolean;
+  onToggle: () => void;
+  color: string | null;
+  onColor: (color: string) => void;
+  size: string | null;
+  onSize: (size: string) => void;
+}
+
+function CardFace({ item, filter, options }: { item: DiscoverItem; filter: StyleFilter | null; options?: OptionsState }) {
+  const summary = options && (options.size || options.color) ? [options.size, options.color].filter(Boolean).join(' · ') : 'View options';
   return (
     <>
       <img src={item.image} alt={item.alt} draggable={false} style={{ objectPosition: item.focus }} />
@@ -52,8 +70,76 @@ function CardFace({ item, filter }: { item: DiscoverItem; filter: StyleFilter | 
         <h1>{item.title}</h1>
         <div className="meta">
           <span>${item.price}</span>
-          {item.colors && <><span className="dot">•</span><span>{item.colors} colors</span></>}
+          <span className="dot">•</span>
+          <button
+            type="button"
+            data-options
+            className={`options-toggle ${options?.open ? 'open' : ''}`}
+            aria-expanded={options?.open ?? false}
+            tabIndex={options ? 0 : -1}
+            onClick={options?.onToggle}
+          >
+            {summary}
+            <Icon name="arrow" size={13} />
+          </button>
         </div>
+        <AnimatePresence initial={false}>
+          {options?.open && (
+            <motion.div
+              key="options"
+              className="options-wrap"
+              initial={{ height: 0, opacity: 0, y: 14 }}
+              animate={{ height: 'auto', opacity: 1, y: 0 }}
+              exit={{ height: 0, opacity: 0, y: 14 }}
+              transition={{ type: 'spring', stiffness: 380, damping: 38 }}
+            >
+              <div className="options-panel" data-options>
+                {item.colorOptions.length > 1 && (
+                  <div className="opt-group">
+                    <span className="opt-title">Color{options.color ? ` · ${options.color}` : ''}</span>
+                    <div className="opt-swatches" role="radiogroup" aria-label="Color">
+                      {item.colorOptions.map((c) => (
+                        <button
+                          key={c.name}
+                          type="button"
+                          role="radio"
+                          aria-checked={options.color === c.name}
+                          aria-label={c.name}
+                          className={`opt-swatch ${options.color === c.name ? 'on' : ''}`}
+                          onClick={() => options.onColor(c.name)}
+                        >
+                          <span style={{ background: c.hex }} />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="opt-group">
+                  <span className="opt-title">
+                    {item.sizes.length > 1 ? 'Size' : 'Fit'}
+                    {item.sizes.length <= 1 ? ' · One size' : ''}
+                  </span>
+                  {item.sizes.length > 1 && (
+                    <div className="opt-sizes" role="radiogroup" aria-label="Size">
+                      {item.sizes.map((sz) => (
+                        <button
+                          key={sz}
+                          type="button"
+                          role="radio"
+                          aria-checked={options.size === sz}
+                          className={`opt-size ${options.size === sz ? 'on' : ''}`}
+                          onClick={() => options.onSize(sz)}
+                        >
+                          {sz}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </>
   );
@@ -66,27 +152,66 @@ interface Props {
   onFeedTab: (tab: FeedTab) => void;
   collections: Collection[];
   onToggleCollection: (collectionId: string, itemId: string) => void;
-  onCreateCollection: (name: string, itemId: string) => void;
-  onSwipe: (intent: SwipeIntent, id: string) => void;
+  onCreateCollection: (name: string, itemId: string, isPrivate: boolean) => void;
   cartCount: number;
-  onOpenCart: () => void;
+  lines: CartLine[];
+  onChangeQty: (key: string, delta: 1 | -1) => void;
+  appliedCode: string | null;
+  onApplyCode: (code: string | null) => void;
+  onSwipe: (intent: SwipeIntent, id: string, variant?: Variant) => void;
   reviews: Review[];
   filter: StyleFilter | null;
-  onOpenSearch: () => void;
+  productFilters: ProductFilters;
+  onProductFilters: (filters: ProductFilters) => void;
+  onSearch: (query: string) => void;
   onClearFilter: () => void;
 }
 
 export default function DiscoverScreen({
-  nav, onNav, feedTab, onFeedTab, collections, onToggleCollection, onCreateCollection, onSwipe, cartCount, onOpenCart, reviews, filter, onOpenSearch, onClearFilter,
+  nav,
+  onNav,
+  feedTab,
+  onFeedTab,
+  collections,
+  onToggleCollection,
+  onCreateCollection,
+  onSwipe,
+  cartCount,
+  lines,
+  onChangeQty,
+  appliedCode,
+  onApplyCode,
+  reviews,
+  filter,
+  productFilters: filters,
+  onProductFilters: setFilters,
+  onSearch,
+  onClearFilter,
 }: Props) {
   const [index, setIndex] = useState(0);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<number | undefined>(undefined);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [query, setQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
+  const filterCount = activeFilterCount(filters);
+  const [optsOpen, setOptsOpen] = useState(false);
+  const [color, setColor] = useState<string | null>(null);
+  const [size, setSize] = useState<string | null>(null);
   const [drag, setDrag] = useState<DragState>(IDLE);
   const [reviewsOpen, setReviewsOpen] = useState(false);
   const [collectionsOpen, setCollectionsOpen] = useState(false);
   const busy = useRef(false);
   const tabsRef = useRef<HTMLElement>(null);
   const firstTabScroll = useRef(true);
-  const tabDrag = useRef({ active: false, moved: false, startX: 0, startScroll: 0 });
+  const tabDrag = useRef({
+    active: false,
+    moved: false,
+    startX: 0,
+    startScroll: 0,
+  });
 
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -95,8 +220,74 @@ export default function DiscoverScreen({
   // The card behind grows into place as the front card is pulled away.
   const nextScale = useTransform([x, y], ([lx, ly]: number[]) => 0.94 + 0.06 * Math.min(Math.hypot(lx, ly) / THRESHOLD, 1));
 
-  const item = DISCOVER_ITEMS[index % DISCOVER_ITEMS.length];
-  const nextItem = DISCOVER_ITEMS[(index + 1) % DISCOVER_ITEMS.length];
+  // The deck is the feed narrowed by the filters sheet (a stand-in for querying the API with them).
+  const feed = useMemo(() => {
+    const matches = DISCOVER_ITEMS.filter((i) => matchesFilters(i, filters));
+    return matches.length ? matches : DISCOVER_ITEMS;
+  }, [filters]);
+  const item = feed[index % feed.length];
+
+  // Tapping anywhere outside the options collapses them.
+  useEffect(() => {
+    if (!optsOpen) return;
+    const onDown = (e: PointerEvent) => {
+      if (!(e.target as Element | null)?.closest('[data-options]')) setOptsOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [optsOpen]);
+
+  const closeSearch = () => {
+    setSearching(false);
+    setQuery('');
+  };
+  const runSearch = () => {
+    const q = query.trim();
+    if (!q) return;
+    closeSearch();
+    setIndex(0);
+    onSearch(q);
+  };
+  useEffect(() => {
+    if (!searching) return;
+    searchRef.current?.focus();
+    // Tapping anywhere outside the search bar (or its button) collapses it.
+    const onDown = (e: PointerEvent) => {
+      if (!(e.target as Element | null)?.closest('[data-search]')) closeSearch();
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [searching]);
+
+  const flash = (message: string) => {
+    window.clearTimeout(toastTimer.current);
+    setToast(message);
+    toastTimer.current = window.setTimeout(() => setToast(null), 2200);
+  };
+  // One-size items need no pick; colour is optional, so it defaults to the first.
+  const oneSize = item.sizes.length <= 1;
+  const chosenSize = oneSize ? (item.sizes[0] ?? '') : size;
+  const chosenColor = color ?? item.colorOptions[0]?.name ?? '';
+
+  const shareItem = async () => {
+    // Mock link: there's no public product page yet.
+    const url = `${window.location.origin}/p/${item.id}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: item.title,
+          text: `${item.title} by ${item.brand} on Agora`,
+          url,
+        });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      flash('Link copied');
+    } catch {
+      // Share sheet dismissed, or clipboard blocked: nothing to do.
+    }
+  };
+  const nextItem = feed[(index + 1) % feed.length];
   const saved = collections.some((c) => c.itemIds.includes(item.id));
   const reviewCount = reviewsFor(item.id, reviews).length;
 
@@ -110,17 +301,27 @@ export default function DiscoverScreen({
       behavior: firstTabScroll.current ? 'instant' : 'smooth',
     });
     firstTabScroll.current = false;
-  }, [feedTab]);
+  }, [feedTab, searching]);
 
   // Warm the cache so the next photo is ready when the fade-in starts.
   useEffect(() => {
-    const upcoming = DISCOVER_ITEMS[(index + 2) % DISCOVER_ITEMS.length];
+    const upcoming = feed[(index + 2) % feed.length];
     const img = new Image();
     img.src = upcoming.image;
-  }, [index]);
+  }, [index, feed]);
 
   const commit = async (intent: SwipeIntent) => {
     if (busy.current) return;
+    if (intent === 'cart' && !chosenSize) {
+      // Size is required: bounce back, open the options and say why.
+      const spring = { type: 'spring' as const, stiffness: 420, damping: 32 };
+      animate(x, 0, spring);
+      animate(y, 0, spring);
+      setDrag(IDLE);
+      setOptsOpen(true);
+      flash('Choose a size first');
+      return;
+    }
     busy.current = true;
     setDrag({ intent, strength: 1 });
 
@@ -130,12 +331,15 @@ export default function DiscoverScreen({
     const toY = intent === 'cart' ? (y.get() > 0 ? 640 : -640) : y.get();
     await Promise.all([animate(x, toX, exit), animate(y, toY, exit), animate(opacity, 0, exit)]);
 
-    onSwipe(intent, item.id);
+    onSwipe(intent, item.id, intent === 'cart' ? { color: chosenColor, size: chosenSize ?? '' } : undefined);
     // The card behind is already showing the next item, so swap the front card to it
     // and reset in a single paint: no flash, no gap.
     flushSync(() => {
       setIndex((i) => i + 1);
       setDrag(IDLE);
+      setOptsOpen(false);
+      setColor(null);
+      setSize(null);
     });
     x.set(0);
     y.set(0);
@@ -186,20 +390,39 @@ export default function DiscoverScreen({
             onDrag={handleDrag}
             onDragEnd={handleDragEnd}
           >
-            <CardFace item={item} filter={filter} />
+            <CardFace
+              item={item}
+              filter={filter}
+              options={{
+                open: optsOpen,
+                onToggle: () => setOptsOpen((o) => !o),
+                color,
+                onColor: setColor,
+                size,
+                onSize: setSize,
+              }}
+            />
           </motion.div>
           <div className="top-shade" />
 
           <header className="top-bar">
-            <button className="glass-button" aria-label="Browse by style" onClick={onOpenSearch}><Icon name="sliders" size={21} /></button>
+            <button className={`glass-button ${filterCount ? 'filters-on' : ''}`} aria-label={filterCount ? `Filters, ${filterCount} active` : 'Filters'} onClick={() => setFiltersOpen(true)}>
+              <Icon name="sliders" size={21} />
+            </button>
             <nav
               className="feed-tabs"
+              hidden={searching}
               aria-label="Feed"
               ref={tabsRef}
               onPointerDown={(e) => {
                 // Mouse click-and-drag to scroll; touch already scrolls natively.
                 if (e.pointerType !== 'mouse') return;
-                tabDrag.current = { active: true, moved: false, startX: e.clientX, startScroll: e.currentTarget.scrollLeft };
+                tabDrag.current = {
+                  active: true,
+                  moved: false,
+                  startX: e.clientX,
+                  startScroll: e.currentTarget.scrollLeft,
+                };
               }}
               onPointerMove={(e) => {
                 const d = tabDrag.current;
@@ -231,28 +454,84 @@ export default function DiscoverScreen({
               }}
             >
               {FEED_TABS.map((t) => (
-                <button key={t} className={feedTab === t ? 'active' : ''} aria-current={feedTab === t ? 'true' : undefined} onClick={() => onFeedTab(t)}>{t}</button>
+                <button key={t} className={feedTab === t ? 'active' : ''} aria-current={feedTab === t ? 'true' : undefined} onClick={() => onFeedTab(t)}>
+                  {t}
+                </button>
               ))}
             </nav>
-            <button className="glass-button cart-button" aria-label={`Shopping cart, ${cartCount} items`} onClick={onOpenCart}>
-              <Icon name="cart" size={21} />{cartCount > 0 && <span>{cartCount}</span>}
+            {searching && (
+              <motion.form
+                className="top-search"
+                data-search
+                role="search"
+                initial={{ opacity: 0, scaleX: 0.2 }}
+                animate={{ opacity: 1, scaleX: 1 }}
+                transition={{ type: 'spring', stiffness: 380, damping: 36 }}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  runSearch();
+                }}
+              >
+                <input
+                  ref={searchRef}
+                  type="search"
+                  value={query}
+                  placeholder="Search pieces, brands, styles"
+                  aria-label="Search Agora"
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') closeSearch();
+                  }}
+                />
+              </motion.form>
+            )}
+            <button
+              className="glass-button"
+              data-search
+              aria-label={searching ? (query.trim() ? 'Search' : 'Close search') : 'Search'}
+              onClick={() => (searching ? (query.trim() ? runSearch() : closeSearch()) : setSearching(true))}
+            >
+              <Icon name={searching && !query.trim() ? 'x' : 'search'} size={21} />
             </button>
           </header>
 
           {filter && (
             <div className="filter-chip" role="status">
-              <span>Showing <strong>{filterLabel(filter)}</strong></span>
-              <button onClick={onClearFilter} aria-label="Clear filter"><Icon name="x" size={14} /></button>
+              <span>
+                Showing <strong>{filterLabel(filter)}</strong>
+              </span>
+              <button onClick={onClearFilter} aria-label="Clear filter">
+                <Icon name="x" size={14} />
+              </button>
             </div>
           )}
 
           <aside className="social-actions">
-            <button aria-label={`See ${reviewCount} reviews`} onClick={() => setReviewsOpen(true)}><span className="action-circle"><Icon name="message" /></span><small>{reviewCount}</small></button>
+            <button aria-label={`See ${reviewCount} reviews`} onClick={() => setReviewsOpen(true)}>
+              <span className="action-circle">
+                <Icon name="message" />
+              </span>
+              <small>{reviewCount}</small>
+            </button>
             <button aria-label={saved ? 'Remove bookmark' : 'Bookmark'} onClick={() => setCollectionsOpen(true)}>
-              <span className={`action-circle ${saved ? 'selected' : ''}`}><Icon name="bookmark" filled={saved} /></span>
+              <span className={`action-circle ${saved ? 'selected' : ''}`}>
+                <Icon name="bookmark" filled={saved} />
+              </span>
               <small>{saved ? 'Saved' : 'Save'}</small>
             </button>
-            <button aria-label="Share product"><span className="action-circle"><Icon name="share" /></span><small>Share</small></button>
+            <button aria-label={`Shopping cart, ${cartCount} items`} onClick={() => setCartOpen(true)}>
+              <span className="action-circle cart-circle">
+                <Icon name="cart" />
+                {cartCount > 0 && <b>{cartCount}</b>}
+              </span>
+              <small>Cart</small>
+            </button>
+            <button aria-label="Share product" onClick={shareItem}>
+              <span className="action-circle">
+                <Icon name="share" />
+              </span>
+              <small>Share</small>
+            </button>
           </aside>
         </div>
 
@@ -270,6 +549,30 @@ export default function DiscoverScreen({
 
         <BottomNav current={nav} onChange={onNav} variant="discovery" />
 
+        {toast && (
+          <div className="toast" role="status">
+            {toast}
+          </div>
+        )}
+
+        <FilterSheet
+          open={filtersOpen}
+          onClose={() => setFiltersOpen(false)}
+          applied={filters}
+          onApply={(f) => {
+            setFilters(f);
+            setIndex(0);
+          }}
+          countFor={(f) => DISCOVER_ITEMS.filter((i) => matchesFilters(i, f)).length}
+        />
+        <CartSheet
+          open={cartOpen}
+          onClose={() => setCartOpen(false)}
+          lines={lines}
+          onChangeQty={onChangeQty}
+          appliedCode={appliedCode}
+          onApplyCode={onApplyCode}
+        />
         <ReviewsSheet item={item} reviews={reviews} open={reviewsOpen} onClose={() => setReviewsOpen(false)} />
         <CollectionSheet
           item={item}
@@ -277,7 +580,7 @@ export default function DiscoverScreen({
           open={collectionsOpen}
           onClose={() => setCollectionsOpen(false)}
           onToggle={(cid) => onToggleCollection(cid, item.id)}
-          onCreate={(name) => onCreateCollection(name, item.id)}
+          onCreate={(name, isPrivate) => onCreateCollection(name, item.id, isPrivate)}
         />
       </section>
     </main>

@@ -392,3 +392,51 @@ export async function fetchCoinHistory(
 
   return (data || []) as CoinTransaction[];
 }
+
+// =========================================================
+// PROFILE PHOTO
+// =========================================================
+
+const AVATAR_BUCKET = 'avatars';
+/** Matches the default in schema.sql, used when a photo is removed. */
+const DEFAULT_AVATAR_URL = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200';
+
+/**
+ * Uploads an (already webp) image to the avatars bucket and saves its public URL on the profile.
+ * Returns the public URL, or null if anything failed.
+ */
+export async function uploadAvatar(
+  image: Blob,
+  userId: string = DEMO_USER_ID
+): Promise<string | null> {
+  if (!isSupabaseConfigured) return null;
+
+  const ext = image.type === 'image/webp' ? 'webp' : image.type === 'image/jpeg' ? 'jpg' : 'png';
+  // A fresh path per upload so the CDN and browsers never serve a stale photo.
+  const path = `${userId}/${Date.now()}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from(AVATAR_BUCKET)
+    .upload(path, image, { contentType: image.type, cacheControl: '31536000' });
+  if (uploadError) return null;
+
+  const { data } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(path);
+  const { error } = await supabase.from('profiles').update({ avatar_url: data.publicUrl }).eq('id', userId);
+  return error ? null : data.publicUrl;
+}
+
+/** Sets the profile photo back to the default. */
+export async function removeAvatar(userId: string = DEMO_USER_ID): Promise<boolean> {
+  if (!isSupabaseConfigured) return true;
+  const { error } = await supabase.from('profiles').update({ avatar_url: DEFAULT_AVATAR_URL }).eq('id', userId);
+  return !error;
+}
+
+/** The saved profile photo URL, or null when the user hasn't uploaded one. */
+export async function fetchAvatar(userId: string = DEMO_USER_ID): Promise<string | null> {
+  if (!isSupabaseConfigured) return null;
+  const { data } = await supabase.from('profiles').select('avatar_url').eq('id', userId).maybeSingle();
+  const url = data?.avatar_url as string | undefined;
+  // Only uploaded photos count; the schema default is a stock image.
+  return url && url.includes(`/storage/v1/object/public/${AVATAR_BUCKET}/`) ? url : null;
+}

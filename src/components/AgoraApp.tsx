@@ -7,8 +7,10 @@ import HomeScreen from '@/components/screens/HomeScreen';
 import ProfileScreen from '@/components/screens/ProfileScreen';
 import FriendsScreen from '@/components/screens/FriendsScreen';
 import SettingsScreen from '@/components/screens/SettingsScreen';
+import ProductScreen from '@/components/screens/ProductScreen';
 import CollectionScreen from '@/components/screens/CollectionScreen';
 import CartScreen from '@/components/screens/CartScreen';
+import { EMPTY_FILTERS, type ProductFilters } from '@/lib/filters';
 import SearchScreen, { type StyleFilter } from '@/components/screens/SearchScreen';
 import type { FeedTab, SwipeIntent } from '@/components/screens/DiscoverScreen';
 import { INITIAL_FRIENDS, type Friend } from '@/lib/friends';
@@ -18,11 +20,11 @@ import type { Variant } from '@/components/ui/ProductSheet';
 import { REVIEWS, type Review } from '@/lib/reviews';
 import { INITIAL_COLLECTIONS, LIKED_ID, type Collection } from '@/lib/collections';
 import { cartItemIdFor, sortLikedFirst, toUiCollection, toUiFriend } from '@/lib/accountMapping';
-import { fetchCartItems, fetchCollections, fetchFriendsWithCollections, recordSwipe, removeFromCart, toggleLikedItem } from '@/lib/supabase/api';
-import { DEMO_USER_ID } from '@/lib/supabase/client';
+import { fetchAvatar, fetchCartItems, fetchCollections, fetchFriendsWithCollections, recordSwipe, removeAvatar, removeFromCart, toggleLikedItem, uploadAvatar } from '@/lib/supabase/api';
+import { DEMO_USER_ID, isSupabaseConfigured } from '@/lib/supabase/client';
 
 /** Screens that sit outside the bottom-nav tabs. */
-type Overlay = 'search' | 'settings' | 'cart' | 'collection' | null;
+type Overlay = 'search' | 'settings' | 'cart' | 'collection' | 'product' | null;
 interface CartEntry {
   key: string;
   id: string;
@@ -34,7 +36,11 @@ interface CartEntry {
 export default function AgoraApp() {
   const [nav, setNav] = useState<NavTab>('discover');
   const [overlay, setOverlay] = useState<Overlay>(null);
+  const [userPhoto, setUserPhoto] = useState<string | null>(null);
+  const [openProductId, setOpenProductId] = useState<string | null>(null);
   const [filter, setFilter] = useState<StyleFilter | null>(null);
+  // Product filters (size, colour, price...) are set from Home or Discover and applied in Discover.
+  const [productFilters, setProductFilters] = useState<ProductFilters>(EMPTY_FILTERS);
   const [feedTab, setFeedTab] = useState<FeedTab>('For You');
   const [friends, setFriends] = useState<Friend[]>(INITIAL_FRIENDS);
   const [openCollectionId, setOpenCollectionId] = useState<string | null>(null);
@@ -71,6 +77,7 @@ export default function AgoraApp() {
         }
       })
       .catch((error) => console.error('Error loading demo account:', error));
+    fetchAvatar(DEMO_USER_ID).then((url) => url && setUserPhoto(url));
   }, []);
 
   useEffect(() => {
@@ -103,7 +110,7 @@ export default function AgoraApp() {
   };
 
   const saveReview = (itemId: string, rating: number, text: string) =>
-    setMyReviews((m) => ({
+    setMyReviews((m) => (m[itemId] ? m : {
       ...m,
       [itemId]: {
         id: `mine-${itemId}`,
@@ -133,8 +140,9 @@ export default function AgoraApp() {
       ),
     );
   };
-  const createCollection = (name: string, itemId: string) =>
-    setCollections((cs) => [...cs, { id: `c-${Date.now()}`, name, isPrivate: true, pieces: [], itemIds: [itemId] }]);
+  const isLiked = (itemId: string) => collections.some((c) => c.id === LIKED_ID && c.itemIds.includes(itemId));
+  const createCollection = (name: string, itemId: string, isPrivate: boolean) =>
+    setCollections((cs) => [...cs, { id: `c-${Date.now()}`, name, isPrivate, pieces: [], itemIds: [itemId] }]);
 
   const createEmptyCollection = (name: string, isPrivate: boolean) =>
     setCollections((cs) => [...cs, { id: `c-${Date.now()}`, name, isPrivate, pieces: [], itemIds: [] }]);
@@ -150,6 +158,28 @@ export default function AgoraApp() {
     setOverlay('collection');
   };
 
+  const openProduct = (id: string) => {
+    setOpenProductId(id);
+    setOverlay('product');
+  };
+
+  // Photos are saved to Supabase as a webp link. Without Supabase they just live in this session.
+  const changePhoto = async (image: Blob | null) => {
+    if (!image) {
+      if (!(await removeAvatar(DEMO_USER_ID))) return false;
+      setUserPhoto(null);
+      return true;
+    }
+    if (!isSupabaseConfigured) {
+      setUserPhoto(URL.createObjectURL(image));
+      return true;
+    }
+    const url = await uploadAvatar(image, DEMO_USER_ID);
+    if (!url) return false;
+    setUserPhoto(url);
+    return true;
+  };
+
   const goTo = (tab: NavTab) => {
     if (tab === 'closet') {
       setOverlay('search');
@@ -158,7 +188,7 @@ export default function AgoraApp() {
     setOverlay(null);
     setNav(tab);
   };
-  const handleSwipe = async (intent: SwipeIntent, id: string) => {
+  const handleSwipe = async (intent: SwipeIntent, id: string, variant?: Variant) => {
     const productId = findProduct(id)?.productId;
     if (productId) {
       const persisted = await recordSwipe(productId, intent === 'reject' ? 'left' : 'right', DEMO_USER_ID, intent === 'cart');
@@ -171,10 +201,10 @@ export default function AgoraApp() {
       if (productId && !(await toggleLikedItem(productId, DEMO_USER_ID))) return;
       setCollections((cs) => cs.map((c) => (c.id === LIKED_ID && !c.itemIds.includes(id) ? { ...c, itemIds: [...c.itemIds, id] } : c)));
     }
-    if (intent === 'cart') addToCart(id);
+    if (intent === 'cart') addToCart(id, variant);
   };
   const runSearch = (query: string) => {
-    setFilter({ query });
+    setFilter(query ? { query } : null);
     goTo('discover');
   };
   const seeAll = (tab: FeedTab) => {
@@ -207,6 +237,29 @@ export default function AgoraApp() {
             onUpdate={(patch) => updateCollection(collection.id, patch)}
             onDelete={() => deleteCollection(collection.id)}
             onAddToCart={addToCart}
+            cartCount={cartCount}
+            onOpenCart={() => setOverlay('cart')}
+            isLiked={isLiked}
+            onToggleLike={(id) => toggleInCollection(LIKED_ID, id)}
+          />
+        );
+      }
+    }
+    if (overlay === 'product') {
+      const product = openProductId ? findProduct(openProductId) : undefined;
+      if (product) {
+        return (
+          <ProductScreen
+            key={product.id}
+            nav={nav}
+            onNav={goTo}
+            onBack={() => setOverlay(null)}
+            item={product}
+            cartCount={cartCount}
+            onOpenCart={() => setOverlay('cart')}
+            liked={isLiked(product.id)}
+            onToggleLike={() => toggleInCollection(LIKED_ID, product.id)}
+            onAddToCart={(variant) => addToCart(product.id, variant)}
           />
         );
       }
@@ -222,6 +275,8 @@ export default function AgoraApp() {
           onBack={() => goTo('profile')}
           name={userName}
           handle={userHandle}
+          photo={userPhoto}
+          onChangePhoto={changePhoto}
           onChangeName={setUserName}
           darkMode={darkMode}
           onToggleDark={() => setDarkMode((v) => !v)}
@@ -252,10 +307,13 @@ export default function AgoraApp() {
             onNav={goTo}
             onOpenSearch={() => setOverlay('search')}
             onSearch={runSearch}
+            productFilters={productFilters}
+            onProductFilters={setProductFilters}
             cartCount={cartCount}
             onOpenCart={() => setOverlay('cart')}
             onOpenSettings={() => setOverlay('settings')}
             onSeeAll={seeAll}
+            onOpenProduct={openProduct}
           />
         );
       case 'profile':
@@ -269,6 +327,7 @@ export default function AgoraApp() {
             myReviews={myReviews}
             onSaveReview={saveReview}
             name={userName}
+            photo={userPhoto}
             onOpenSettings={() => setOverlay('settings')}
           />
         );
@@ -279,8 +338,13 @@ export default function AgoraApp() {
             name={userName}
             handle={userHandle}
             friends={friends}
+            onAddFriend={(f) => setFriends((fs) => (fs.some((x) => x.tag === f.tag) ? fs : [...fs, f]))}
             onUnfriend={(tag) => setFriends((fs) => fs.filter((f) => f.tag !== tag))}
             onAddToCart={addToCart}
+            cartCount={cartCount}
+            onOpenCart={() => setOverlay('cart')}
+            isLiked={isLiked}
+            onToggleLike={(id) => toggleInCollection(LIKED_ID, id)}
           />;
       default:
         return (
@@ -290,21 +354,26 @@ export default function AgoraApp() {
             feedTab={feedTab}
             onFeedTab={setFeedTab}
             filter={filter}
-            onOpenSearch={() => setOverlay('search')}
+            productFilters={productFilters}
+            onProductFilters={setProductFilters}
+            onSearch={runSearch}
             onClearFilter={() => setFilter(null)}
             collections={collections}
             onToggleCollection={toggleInCollection}
             onCreateCollection={createCollection}
             onSwipe={handleSwipe}
             cartCount={cartCount}
-            onOpenCart={() => setOverlay('cart')}
+            lines={cartLines}
+            onChangeQty={changeQty}
+            appliedCode={discountCode}
+            onApplyCode={setDiscountCode}
             reviews={allReviews}
           />
         );
     }
   };
 
-  const devScreen: DevScreen = overlay === 'collection' ? 'profile' : overlay ?? (nav === 'closet' ? 'search' : (nav as DevScreen));
+  const devScreen: DevScreen = overlay === 'collection' ? 'profile' : overlay === 'product' ? 'home' : overlay ?? (nav === 'closet' ? 'search' : (nav as DevScreen));
 
   return (
     <>

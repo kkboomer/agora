@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import Stars from '@/components/ui/Stars';
+import FriendSearchSheet from '@/components/ui/FriendSearchSheet';
 import BottomSheet from '@/components/ui/BottomSheet';
 import BottomNav, { type NavTab } from '@/components/ui/BottomNav';
 import CollectionScreen from '@/components/screens/CollectionScreen';
@@ -20,14 +21,20 @@ interface Props {
   handle: string;
   friends: Friend[];
   onUnfriend: (tag: string) => void;
+  onAddFriend: (friend: Friend) => void;
   onAddToCart: (itemId: string, variant: Variant) => void;
+  cartCount: number;
+  onOpenCart: () => void;
+  isLiked: (itemId: string) => boolean;
+  onToggleLike: (itemId: string) => void;
 }
 
-export default function FriendsScreen({ nav, onNav, name, handle, friends, onUnfriend, onAddToCart }: Props) {
+export default function FriendsScreen({ nav, onNav, name, handle, friends, onUnfriend, onAddFriend, onAddToCart, cartCount, onOpenCart, isLiked, onToggleLike }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const [friendTab, setFriendTab] = useState<'collections' | 'reviews'>('collections');
   const [viewing, setViewing] = useState<Collection | null>(null);
   const [confirmUnfriend, setConfirmUnfriend] = useState(false);
+  const [finding, setFinding] = useState(false);
   const friend = friends.find((f) => f.name === selected);
   if (friend && viewing) {
     return (
@@ -39,6 +46,10 @@ export default function FriendsScreen({ nav, onNav, name, handle, friends, onUnf
         readOnly
         ownerName={friend.name.split(' ')[0]}
         onAddToCart={onAddToCart}
+        cartCount={cartCount}
+        onOpenCart={onOpenCart}
+        isLiked={isLiked}
+        onToggleLike={onToggleLike}
       />
     );
   }
@@ -109,8 +120,8 @@ export default function FriendsScreen({ nav, onNav, name, handle, friends, onUnf
           ) : (
             <>
               <header className="friends-header">
-                <div><p>YOUR CIRCLE</p><h1>{name}</h1><span>{handle} · AGORA-2841</span></div>
-                <button aria-label="Add friends"><Icon name="userPlus" size={23} /></button>
+                <div><p>YOUR CIRCLE</p><h1>{name}</h1><span>{handle}</span></div>
+                <button aria-label="Find friends" onClick={() => setFinding(true)}><Icon name="userPlus" size={23} /></button>
               </header>
               <div className="friends-heading"><div><span>FRIENDS</span><h2>Your circle</h2></div><small>{friends.length} friends</small></div>
               <section className="friends-list">
@@ -165,6 +176,7 @@ export default function FriendsScreen({ nav, onNav, name, handle, friends, onUnf
           </BottomSheet>
         )}
 
+        <FriendSearchSheet open={finding} onClose={() => setFinding(false)} friends={friends} onAdd={onAddFriend} />
         <BottomNav current={nav} onChange={onNav} variant="home" />
       </section>
     </main>
