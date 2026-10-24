@@ -12,13 +12,13 @@ interface Props {
   onNav: (tab: NavTab) => void;
   savedItems: DiscoverItem[];
   collections: (Collection & { items: { product: Product }[] })[];
+  name: string;
+  onOpenSettings: () => void;
 }
 
-export default function ProfileScreen({ nav, onNav, savedItems, collections }: Props) {
+export default function ProfileScreen({ nav, onNav, savedItems, collections, name, onOpenSettings }: Props) {
   const [profileTab, setProfileTab] = useState<'collections' | 'saved'>('collections');
-  const orderedCollections = [...collections].sort((a, b) =>
-    Number(b.name === 'Liked items') - Number(a.name === 'Liked items')
-  );
+  const orderedCollections = [...collections].sort((a, b) => Number(b.name === 'Liked items') - Number(a.name === 'Liked items'));
 
   return (
     <main className="app-shell">
@@ -26,8 +26,8 @@ export default function ProfileScreen({ nav, onNav, savedItems, collections }: P
         <div className="profile-scroll">
           <header className="profile-header">
             <div className="profile-avatar"><Icon name="user" size={27} /></div>
-            <div><p>YOUR PROFILE</p><h1>Alex Rivera</h1></div>
-            <button aria-label="Profile settings"><Icon name="sliders" size={20} /></button>
+            <div><p>YOUR PROFILE</p><h1>{name}</h1></div>
+            <button aria-label="Profile settings" onClick={onOpenSettings}><Icon name="cog" size={20} /></button>
           </header>
 
           <div className="profile-tabs" role="tablist">

@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import BottomNav, { type NavTab } from '@/components/ui/BottomNav';
+import type { FeedTab } from '@/components/screens/DiscoverScreen';
 
 interface Props {
   nav: NavTab;
@@ -9,9 +10,12 @@ interface Props {
   onOpenSearch: () => void;
   onSearch: (query: string) => void;
   cartCount: number;
+  onOpenSettings: () => void;
+  onSeeAll: (tab: FeedTab) => void;
+  onOpenCart: () => void;
 }
 
-export default function HomeScreen({ nav, onNav, onOpenSearch, onSearch, cartCount }: Props) {
+export default function HomeScreen({ nav, onNav, onOpenSearch, onSearch, cartCount, onOpenSettings, onSeeAll, onOpenCart }: Props) {
   const [query, setQuery] = useState('');
 
   return (
@@ -19,9 +23,9 @@ export default function HomeScreen({ nav, onNav, onOpenSearch, onSearch, cartCou
       <section className="phone home-screen" aria-label="Agora home">
         <div className="home-scroll">
           <header className="home-header">
-            <button className="header-action" aria-label="Settings"><Icon name="sliders" size={21} /></button>
+            <button className="header-action" aria-label="Settings" onClick={onOpenSettings}><Icon name="cog" size={21} /></button>
             <h1>Agora</h1>
-            <button className="header-action home-cart" aria-label="Shopping cart"><Icon name="cart" size={21} /><span>{cartCount}</span></button>
+            <button className="header-action home-cart" aria-label={`Shopping cart, ${cartCount} items`} onClick={onOpenCart}><Icon name="cart" size={21} />{cartCount > 0 && <span>{cartCount}</span>}</button>
           </header>
 
           <form
@@ -32,7 +36,7 @@ export default function HomeScreen({ nav, onNav, onOpenSearch, onSearch, cartCou
               if (query.trim()) onSearch(query.trim());
             }}
           >
-            <Icon name="search" size={20} />
+            <button type="submit" className="search-submit" aria-label="Search"><Icon name="search" size={20} /></button>
             <input type="search" placeholder="Search pieces, brands, styles" aria-label="Search Agora" value={query} onChange={(e) => setQuery(e.target.value)} />
             <button type="button" aria-label="Browse by style" onClick={onOpenSearch}><Icon name="sliders" size={18} /></button>
           </form>
@@ -40,7 +44,7 @@ export default function HomeScreen({ nav, onNav, onOpenSearch, onSearch, cartCou
           <section className="home-section">
             <div className="section-heading">
               <div><span className="section-kicker">NOW</span><h2>Trending pieces</h2></div>
-              <button>See all <Icon name="arrow" size={14} /></button>
+              <button onClick={() => onSeeAll('Trending')}>See all <Icon name="arrow" size={14} /></button>
             </div>
             <div className="trend-grid">
               <article className="trend-card trend-main">
@@ -57,7 +61,7 @@ export default function HomeScreen({ nav, onNav, onOpenSearch, onSearch, cartCou
           <section className="home-section friend-section">
             <div className="section-heading">
               <div><span className="section-kicker">YOUR CIRCLE</span><h2>Friends are into</h2></div>
-              <button>See all <Icon name="arrow" size={14} /></button>
+              <button onClick={() => onSeeAll('Friends')}>See all <Icon name="arrow" size={14} /></button>
             </div>
             <div className="friend-list">
               <article className="friend-card">

@@ -3,9 +3,9 @@ export interface DiscoverItem {
   productId: string;
   brand: string;
   title: string;
+  description: string;
   price: number;
   colors?: number;
-  reviews: number;
   image: string;
   alt: string;
   /** CSS object-position so the subject stays framed in the tall phone crop */
@@ -19,9 +19,9 @@ export const DISCOVER_ITEMS: DiscoverItem[] = [
     productId: '22222222-2222-2222-2222-222222222201',
     brand: 'ATELIER N°7',
     title: 'The Signature Wool Coat',
+    description: 'Long wool-blend coat in warm oatmeal',
     price: 248,
     colors: 4,
-    reviews: 248,
     image:
       'https://images.unsplash.com/photo-1762605135012-56a59a059e60?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=88&w=1000',
     alt: 'Woman wearing a long beige coat on stone steps',
@@ -32,9 +32,9 @@ export const DISCOVER_ITEMS: DiscoverItem[] = [
     productId: '22222222-2222-2222-2222-222222222205',
     brand: 'LEWKIN',
     title: 'Nayela Vintage Wide Leg Jeans',
-    // TODO: placeholder price/reviews — replace with real values
+    description: 'Washed low-rise denim with a relaxed wide leg',
+    // TODO: placeholder price — replace with the real value
     price: 59,
-    reviews: 112,
     image: '/products/lewkin-nayela-jeans.webp',
     alt: 'Woman in a green cropped tee and washed wide leg jeans holding a cream bag',
     focus: 'center 30%',
