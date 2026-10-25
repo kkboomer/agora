@@ -88,11 +88,21 @@ interface OptionsState {
 /** The AI and friend badges. They share one anchor, so their details open in the same spot, and only one is open at a time. */
 function Badges({ item, showAiBadge, friendActivities }: { item: DiscoverItem; showAiBadge: boolean; friendActivities?: FriendActivity[] }) {
   const [open, setOpen] = useState<'ai' | 'friend' | null>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
+  // Tapping anywhere outside the badges collapses whichever one is open. (Capture phase, because the badge buttons stop their own events.)
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!rowRef.current?.contains(e.target as Node)) setOpen(null);
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    return () => document.removeEventListener('pointerdown', onDown, true);
+  }, [open]);
   const showAi = showAiBadge && item.aiMatchScore !== undefined;
   if (!showAi && !friendActivities) return null;
   const toggle = (badge: 'ai' | 'friend') => setOpen((current) => (current === badge ? null : badge));
   return (
-    <div className="relative">
+    <div className="relative" ref={rowRef}>
       {showAi && <AIRecommendationBadge item={item} expanded={open === 'ai'} onToggle={() => toggle('ai')} />}
       {friendActivities && <FriendMatchBadge item={item} friendActivities={friendActivities} expanded={open === 'friend'} onToggle={() => toggle('friend')} />}
     </div>

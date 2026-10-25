@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, Coins, Sparkles } from 'lucide-react';
+import { Coins, Sparkles } from 'lucide-react';
 import type { DiscoverItem } from '@/lib/discoverFeed';
 
 interface AIRecommendationBadgeProps {
@@ -26,28 +26,15 @@ export default function AIRecommendationBadge({ item, expanded, onToggle }: AIRe
         <Sparkles className="h-4 w-4 fill-[#D98A76]" />
       </button>
       {expanded && (
-        <div className="absolute bottom-full left-0 z-20 mb-2 w-[280px] max-w-[calc(100vw-40px)] rounded-2xl border border-white/20 bg-black/70 p-3 text-white shadow-lg backdrop-blur-md">
-          {item.isPromoted && (
-            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#D98A76] to-amber-500/90 px-3 py-1 text-[10px] font-bold tracking-wide">
-              <Coins className="h-3 w-3 text-amber-100" />
-              <span>{item.promoLabel || `Partner Promo • +${item.obolReward} Obols`}</span>
-            </div>
-          )}
-          <div className="flex items-center justify-between gap-2">
-            <span className="flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 shrink-0 fill-[#D98A76] text-[#D98A76]" />
-              <span className="text-[11px] font-extrabold tracking-wide text-[#F5C6B8]">
-                {item.aiMatchScore ?? 94}% AI Style Match
-              </span>
+        <div className="absolute bottom-full left-0 right-3 z-20 mb-2 max-w-[260px] rounded-2xl border border-white/20 bg-black/70 p-3 text-white shadow-lg backdrop-blur-md">
+          <p className="text-[11px] font-extrabold leading-snug tracking-wide text-[#F5C6B8]">
+            {item.aiReason ?? `${item.aiMatchScore ?? 94}% AI Style Match`}
+          </p>
+          {(item.obolReward ?? 0) > 0 && (
+            <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-1 text-[10px] font-bold text-amber-100">
+              <Coins className="h-3 w-3 text-amber-300" />
+              +{item.obolReward} Obols
             </span>
-            <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-white/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white/85">
-              Why this? <ChevronDown className="h-2.5 w-2.5 rotate-180" />
-            </span>
-          </div>
-          {item.aiReason && (
-            <p className="mt-1 text-[11px] font-medium leading-snug text-white/95">
-              {item.aiReason}
-            </p>
           )}
         </div>
       )}
