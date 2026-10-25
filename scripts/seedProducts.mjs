@@ -179,7 +179,7 @@ async function buildAndSeedCatalog() {
       description: item.desc,
       is_promoted: isPromoted,
       promo_label: promoLabel,
-      coin_reward: obolReward,
+      obol_reward: obolReward,
     };
   });
 
@@ -188,7 +188,7 @@ async function buildAndSeedCatalog() {
     .map((p) => {
       const promoSql = p.promo_label ? `'${esc(p.promo_label)}'` : 'null';
       const tagsSql = p.tags.map((t) => `'${esc(t)}'`).join(', ');
-      return `('${esc(p.title)}', '${esc(p.brand_name)}', ${p.price.toFixed(2)}, '${esc(p.image_url)}', '${esc(p.category)}', array[${tagsSql}], '${esc(p.description)}', ${p.is_promoted}, ${promoSql}, ${p.coin_reward})`;
+      return `('${esc(p.title)}', '${esc(p.brand_name)}', ${p.price.toFixed(2)}, '${esc(p.image_url)}', '${esc(p.category)}', array[${tagsSql}], '${esc(p.description)}', ${p.is_promoted}, ${promoSql}, ${p.obol_reward})`;
     })
     .join(',\n  ');
 
@@ -201,7 +201,7 @@ truncate table public.products cascade;
 
 -- 2. Insert ${finalProducts.length} fashion & accessory items (20% Promoted with Obol rewards)
 insert into public.products (
-  title, brand_name, price, image_url, category, tags, description, is_promoted, promo_label, coin_reward
+  title, brand_name, price, image_url, category, tags, description, is_promoted, promo_label, obol_reward
 )
 values
   ${valuesSql};

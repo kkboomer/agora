@@ -9,7 +9,7 @@ import {
   CheckinResult,
   Pin,
   Review,
-  CoinTransaction,
+  ObolTransaction,
   CartItem,
   Collection,
   FriendWithCollections,
@@ -245,7 +245,7 @@ export async function removeFriendship(userId: string, friendId: string): Promis
 
 /**
  * 1-Click Checkout: Converts selected cart items into verified Purchases
- * AND awards Promo Brand bonus coins automatically via our SQL RPC.
+ * AND awards Promo Brand bonus obols automatically via our SQL RPC.
  */
 export async function checkoutCart(
   productIds: string[],
@@ -256,8 +256,8 @@ export async function checkoutCart(
       success: true,
       items_purchased: productIds.length,
       total_spent: 150,
-      coins_earned: 200,
-      new_coin_balance: 650,
+      obols_earned: 200,
+      new_obol_balance: 650,
     };
   }
 
@@ -357,7 +357,7 @@ export async function pinProduct(
 }
 
 /**
- * Submits a verified product review (+ optional bonus coins).
+ * Submits a verified product review (+ optional bonus obols).
  */
 export async function submitReview(
   productId: string,
@@ -387,7 +387,7 @@ export async function submitReview(
 }
 
 // =========================================================
-// PERSON 3 HELPERS: DAILY CHECK-IN & COIN GAMIFICATION
+// PERSON 3 HELPERS: DAILY CHECK-IN & OBOL GAMIFICATION
 // =========================================================
 
 /**
@@ -400,10 +400,10 @@ export async function claimDailyCheckin(
     return {
       success: true,
       already_checked_in: false,
-      coins_awarded: 75,
+      obols_awarded: 75,
       current_streak: 5,
-      new_coin_balance: 525,
-      message: 'Day 5 streak! +75 coins added.',
+      new_obol_balance: 525,
+      message: 'Day 5 streak! +75 obols added.',
     };
   }
 
@@ -416,20 +416,20 @@ export async function claimDailyCheckin(
 }
 
 /**
- * Fetches the user's coin ledger history for the Rewards / Check-in modal.
+ * Fetches the user's obol ledger history for the Rewards / Check-in modal.
  */
-export async function fetchCoinHistory(
+export async function fetchObolHistory(
   userId: string = DEMO_USER_ID
-): Promise<CoinTransaction[]> {
+): Promise<ObolTransaction[]> {
   if (!isSupabaseConfigured) return [];
 
   const { data } = await supabase
-    .from('coin_transactions')
+    .from('obol_transactions')
     .select('*')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
-  return (data || []) as CoinTransaction[];
+  return (data || []) as ObolTransaction[];
 }
 
 // =========================================================

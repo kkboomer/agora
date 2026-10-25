@@ -1,12 +1,12 @@
-truncate table public.coin_transactions, public.reviews, public.pins, public.purchases, public.cart_items, public.collection_items, public.collections, public.friendships, public.swipes, public.products, public.profiles cascade;
+truncate table public.obol_transactions, public.reviews, public.pins, public.purchases, public.cart_items, public.collection_items, public.collections, public.friendships, public.swipes, public.products, public.profiles cascade;
 
-insert into public.profiles (id, username, display_name, avatar_url, bio, coin_balance, checkin_streak, last_checkin_date) values
+insert into public.profiles (id, username, display_name, avatar_url, bio, obol_balance, checkin_streak, last_checkin_date) values
 ('11111111-1111-1111-1111-111111111111', 'alex_cal', 'Alex Rivera', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400', 'Streetwear drops, running gear & desk setups', 450, 4, (current_date - interval '1 day')::date),
 ('33333333-3333-3333-3333-333333333333', 'maya_fits', 'Maya Lin', 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400', 'Vintage outerwear & minimalist essentials', 820, 7, current_date),
 ('44444444-4444-4444-4444-444444444444', 'sofia_reyes', 'Sofia Reyes', 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=400', 'Vintage denim and soft tailoring', 610, 3, current_date),
 ('55555555-5555-5555-5555-555555555555', 'noah_williams', 'Noah Williams', 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400', 'Technical pieces for city miles', 275, 2, current_date);
 
-insert into public.products (id, title, brand_name, price, image_url, category, tags, description, is_promoted, coin_reward) values
+insert into public.products (id, title, brand_name, price, image_url, category, tags, description, is_promoted, obol_reward) values
 ('22222222-2222-2222-2222-222222222201', 'Heavyweight Boxy Hoodie', 'Aether Studios', 68, 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=800', 'Apparel', array['streetwear'], 'Organic cotton fleece hoodie.', true, 200),
 ('22222222-2222-2222-2222-222222222202', 'Gel-Kinetic Metallic Runner', 'ASICS SportStyle', 150, 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800', 'Footwear', array['sneakers'], 'Technical running silhouette.', true, 350),
 ('22222222-2222-2222-2222-222222222203', 'Matte Ceramic Pour-Over Set', 'Kinto Japan', 44, 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=800', 'Home & Dorm', array['coffee'], 'Stoneware dripper and glass server.', false, 0),

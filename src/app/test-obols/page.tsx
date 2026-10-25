@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
-import CoinRewardsModal from '@/components/layout/CoinRewardsModal';
+import ObolRewardsModal from '@/components/layout/ObolRewardsModal';
 import { fetchSwipeDeck, checkoutCart } from '@/lib/supabase/api';
 import { Product } from '@/types/types';
 import { Sparkles, ShoppingCart, Check } from 'lucide-react';
 
-export default function TestCoinsSandbox() {
+export default function TestObolsSandbox() {
   const [products, setProducts] = useState<Product[]>([]);
   const [externalBalance, setExternalBalance] = useState<number | null>(null);
   const [lastCheckoutMsg, setLastCheckoutMsg] = useState<string | null>(null);
@@ -21,11 +21,11 @@ export default function TestCoinsSandbox() {
     setLoadingId(product.id);
     try {
       const res = await checkoutCart([product.id]);
-      setExternalBalance(res.new_coin_balance);
+      setExternalBalance(res.new_obol_balance);
       setLastCheckoutMsg(
-        `Purchased ${product.title}! Earned +${res.coins_earned} promo coins (New balance: ${res.new_coin_balance}).`
+        `Purchased ${product.title}! Earned +${res.obols_earned} promo obols (New balance: ${res.new_obol_balance}).`
       );
-      if (res.coins_earned > 0) {
+      if (res.obols_earned > 0) {
         confetti({ particleCount: 55, spread: 60, origin: { y: 0.7 } });
       }
     } catch (err) {
@@ -38,12 +38,12 @@ export default function TestCoinsSandbox() {
 
   return (
     <div className="mx-auto min-h-screen w-full max-w-[430px] bg-zinc-50 flex flex-col">
-      {/* Mock Top Navbar showing Person 3's Coin Widget */}
+      {/* Mock Top Navbar showing Person 3's Obol Widget */}
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-zinc-200 bg-white/90 backdrop-blur-md px-4 py-3">
         <div className="font-black tracking-tight text-lg text-zinc-900">
           agora<span className="text-rose-500">.</span>
         </div>
-        <CoinRewardsModal externalBalance={externalBalance} />
+        <ObolRewardsModal externalBalance={externalBalance} />
       </header>
 
       <main className="p-4 space-y-4">
@@ -53,9 +53,9 @@ export default function TestCoinsSandbox() {
             Person 3 Backend & Gamification Sandbox
           </h1>
           <p className="mt-1 text-xs text-zinc-300">
-            1. Click the <span className="text-amber-300 font-semibold">Flame / Coin pill</span> in the top right to test your Daily Check-In streak RPC.
+            1. Click the <span className="text-amber-300 font-semibold">Flame / Obol pill</span> in the top right to test your Daily Check-In streak RPC.
             <br />
-            2. Click any item below to test your 1-Click Checkout & Promo Coin Multiplier RPC.
+            2. Click any item below to test your 1-Click Checkout & Promo Obol Multiplier RPC.
           </p>
         </div>
 
@@ -95,7 +95,7 @@ export default function TestCoinsSandbox() {
                     </span>
                     {p.is_promoted && (
                       <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-600 border border-rose-200">
-                        +{p.coin_reward} Coins
+                        +{p.obol_reward} Obols
                       </span>
                     )}
                   </div>

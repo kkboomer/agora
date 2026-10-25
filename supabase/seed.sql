@@ -2,7 +2,7 @@
 -- AGORA MASTER SEED SCRIPT (Safe to re-run before judging!)
 -- =========================================================
 truncate table
-  public.coin_transactions,
+  public.obol_transactions,
   public.reviews,
   public.pins,
   public.purchases,
@@ -17,7 +17,7 @@ cascade;
 
 -- 1. SEED DEMO PROFILES
 -- User 1 matches DEMO_USER_ID in client.ts (last_checkin_date is yesterday so Daily Check-In works live in demo!)
-insert into public.profiles (id, username, display_name, avatar_url, bio, coin_balance, checkin_streak, last_checkin_date)
+insert into public.profiles (id, username, display_name, avatar_url, bio, obol_balance, checkin_streak, last_checkin_date)
 values
   (
     '11111111-1111-1111-1111-111111111111',
@@ -60,8 +60,8 @@ values
     current_date
   );
 
--- 2. SEED PRODUCT CATALOG (Mix of Promoted Coin Multipliers & Standard Drops)
-insert into public.products (id, title, brand_name, price, image_url, category, tags, description, is_promoted, promo_label, coin_reward)
+-- 2. SEED PRODUCT CATALOG (Mix of Promoted Obol Multipliers & Standard Drops)
+insert into public.products (id, title, brand_name, price, image_url, category, tags, description, is_promoted, promo_label, obol_reward)
 values
   (
     '22222222-2222-2222-2222-222222222201',
@@ -73,7 +73,7 @@ values
     array['streetwear', 'hoodie', 'oversized'],
     '500GSM organic cotton fleece with drop shoulders and double-lined hood.',
     true,
-    '🔥 Partner Brand • +200 Coins',
+    '🔥 Partner Brand • +200 Obols',
     200
   ),
   (
@@ -86,7 +86,7 @@ values
     array['sneakers', 'running', 'techwear'],
     'Late-2000s technical running silhouette with breathable mesh and full-length GEL cushioning.',
     true,
-    '⚡ CalHacks Drop • +350 Coins',
+    '⚡ CalHacks Drop • +350 Obols',
     350
   ),
   (
@@ -112,7 +112,7 @@ values
     array['keyboard', 'desk', 'setup'],
     'Ultra-slim aluminum frame with hot-swappable tactile switches and PBT keycaps.',
     true,
-    '💎 Sponsor Promo • +300 Coins',
+    '💎 Sponsor Promo • +300 Obols',
     300
   ),
   (
@@ -138,7 +138,7 @@ values
     array['gorpcore', 'bag', 'waterproof'],
     'Weatherproof ripstop nylon everyday sling with taped seams and quick-release buckle.',
     true,
-    '🔥 Partner Brand • +180 Coins',
+    '🔥 Partner Brand • +180 Obols',
     180
   ),
   (
@@ -164,7 +164,7 @@ values
     array['audio', 'music', 'industrial'],
     'Industrial anodized aluminum headphones with 40-hour battery and spatial audio.',
     true,
-    '⚡ CalHacks Drop • +400 Coins',
+    '⚡ CalHacks Drop • +400 Obols',
     400
   );
 
@@ -208,7 +208,7 @@ values
   ('11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222201');
 
 -- 4. SEED PAST PURCHASES (So Person 2's "Recent Purchases" tab has data right away)
-insert into public.purchases (user_id, product_id, price_paid, coins_earned, is_public)
+insert into public.purchases (user_id, product_id, price_paid, obols_earned, is_public)
 values
   ('11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222207', 76.00, 0, true),
   ('11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222206', 85.00, 180, true);
@@ -227,7 +227,7 @@ values
     '11111111-1111-1111-1111-111111111111',
     '22222222-2222-2222-2222-222222222206',
     5,
-    'Fits a 14-inch laptop charger, water bottle, and keys without feeling bulky on campus. Plus the +180 promo coins hit immediately!',
+    'Fits a 14-inch laptop charger, water bottle, and keys without feeling bulky on campus. Plus the +180 promo obols hit immediately!',
     true
   ),
   (
@@ -238,8 +238,8 @@ values
     true
   );
 
--- 7. SEED COIN LEDGER HISTORY
-insert into public.coin_transactions (user_id, amount, reason, description)
+-- 7. SEED OBOL LEDGER HISTORY
+insert into public.obol_transactions (user_id, amount, reason, description)
 values
   ('11111111-1111-1111-1111-111111111111', 180, 'promo_purchase', 'Earned from Arc''teryx Veilance Promo: Ripstop Crossbody Sling Bag'),
   ('11111111-1111-1111-1111-111111111111', 55, 'daily_checkin', 'Day 4 Check-In Streak Bonus!');

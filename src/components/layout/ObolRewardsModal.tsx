@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import {
-  Coins,
+  Gem,
   Flame,
   Sparkles,
   CheckCircle2,
@@ -16,31 +16,31 @@ import {
 } from 'lucide-react';
 import {
   claimDailyCheckin,
-  fetchCoinHistory,
+  fetchObolHistory,
   fetchPublicProfile,
 } from '@/lib/supabase/api';
 import { DEMO_USER_ID } from '@/lib/supabase/client';
-import { CoinTransaction } from '@/types/types';
+import { ObolTransaction } from '@/types/types';
 
-interface CoinRewardsModalProps {
+interface ObolRewardsModalProps {
   userId?: string;
-  /** Optional external balance override if parent page updates coins after checkout */
+  /** Optional external balance override if parent page updates obols after checkout */
   externalBalance?: number | null;
   onBalanceUpdate?: (newBalance: number) => void;
 }
 
-export default function CoinRewardsModal({
+export default function ObolRewardsModal({
   userId = DEMO_USER_ID,
   externalBalance = null,
   onBalanceUpdate,
-}: CoinRewardsModalProps) {
+}: ObolRewardsModalProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [coinBalance, setCoinBalance] = useState<number>(450);
+  const [obolBalance, setObolBalance] = useState<number>(450);
   const [streak, setStreak] = useState<number>(4);
   const [canClaimToday, setCanClaimToday] = useState<boolean>(true);
   const [isClaiming, setIsClaiming] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [transactions, setTransactions] = useState<CoinTransaction[]>([]);
+  const [transactions, setTransactions] = useState<ObolTransaction[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
 
   const loadWalletState = useCallback(async () => {
@@ -48,11 +48,11 @@ export default function CoinRewardsModal({
     try {
       const [profileData, historyData] = await Promise.all([
         fetchPublicProfile(userId),
-        fetchCoinHistory(userId),
+        fetchObolHistory(userId),
       ]);
 
       if (profileData?.profile) {
-        setCoinBalance(profileData.profile.coin_balance);
+        setObolBalance(profileData.profile.obol_balance);
         setStreak(profileData.profile.checkin_streak);
 
         // Check if last_checkin_date matches today's UTC YYYY-MM-DD
@@ -74,7 +74,7 @@ export default function CoinRewardsModal({
 
   useEffect(() => {
     if (externalBalance !== null && externalBalance !== undefined) {
-      setCoinBalance(externalBalance);
+      setObolBalance(externalBalance);
       loadWalletState();
     }
   }, [externalBalance, loadWalletState]);
@@ -98,10 +98,10 @@ export default function CoinRewardsModal({
       setStatusMessage(result.message);
 
       if (result.success && !result.already_checked_in) {
-        setCoinBalance(result.new_coin_balance);
+        setObolBalance(result.new_obol_balance);
         setStreak(result.current_streak);
         setCanClaimToday(false);
-        onBalanceUpdate?.(result.new_coin_balance);
+        onBalanceUpdate?.(result.new_obol_balance);
         triggerGoldConfetti();
         await loadWalletState();
       } else if (result.already_checked_in) {
@@ -134,8 +134,8 @@ export default function CoinRewardsModal({
         </span>
         <span className="h-3 w-[1px] bg-amber-300" />
         <span className="flex items-center gap-1">
-          <Coins className="h-3.5 w-3.5 fill-amber-400 text-amber-600" />
-          {coinBalance.toLocaleString()}
+          <Gem className="h-3.5 w-3.5 fill-amber-400 text-amber-600" />
+          {obolBalance.toLocaleString()}
         </span>
 
         {/* Pulse dot when daily check-in is available */}
@@ -175,11 +175,11 @@ export default function CoinRewardsModal({
                 <div className="mt-2 flex items-baseline justify-between">
                   <div>
                     <div className="text-4xl font-extrabold tracking-tight flex items-center gap-2">
-                      {coinBalance.toLocaleString()}
-                      <span className="text-lg font-semibold text-amber-100">Coins</span>
+                      {obolBalance.toLocaleString()}
+                      <span className="text-lg font-semibold text-amber-100">Obols</span>
                     </div>
                     <p className="mt-1 text-xs text-amber-100/90">
-                      ≈ ${(coinBalance / 100).toFixed(2)} toward partner drops
+                      ≈ ${(obolBalance / 100).toFixed(2)} toward partner drops
                     </p>
                   </div>
 
@@ -230,7 +230,7 @@ export default function CoinRewardsModal({
                           {isCompleted ? (
                             <CheckCircle2 className="my-1 h-4 w-4 text-amber-600" />
                           ) : (
-                            <Coins className="my-1 h-4 w-4 text-amber-400" />
+                            <Gem className="my-1 h-4 w-4 text-amber-400" />
                           )}
                           <span className="text-[10px] font-bold">+{rewardAmount}</span>
                         </div>
@@ -255,7 +255,7 @@ export default function CoinRewardsModal({
                     ) : canClaimToday ? (
                       <>
                         <Sparkles className="h-4 w-4 text-amber-400" />
-                        Claim Day {streak + 1} Reward (+{25 + Math.min((streak + 1) * 10, 100)} Coins)
+                        Claim Day {streak + 1} Reward (+{25 + Math.min((streak + 1) * 10, 100)} Obols)
                       </>
                     ) : (
                       <>
@@ -279,18 +279,18 @@ export default function CoinRewardsModal({
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-zinc-900">
-                      Boost Coins with Partner Brand Drops
+                      Boost Obols with Partner Brand Drops
                     </h4>
                     <p className="mt-0.5 text-xs text-zinc-600 leading-relaxed">
-                      Look for the <span className="font-semibold text-rose-600">🔥 Partner Brand</span> badge while swiping. Checking out promoted items awards up to <span className="font-semibold">+400 bonus coins</span> instantly.
+                      Look for the <span className="font-semibold text-rose-600">🔥 Partner Brand</span> badge while swiping. Checking out promoted items awards up to <span className="font-semibold">+400 bonus obols</span> instantly.
                     </p>
                   </div>
                 </div>
 
-                {/* Coin Ledger History */}
+                {/* Obol Ledger History */}
                 <div>
                   <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">
-                    Recent Coin Activity
+                    Recent Obol Activity
                   </h3>
 
                   {isLoadingHistory ? (
@@ -299,7 +299,7 @@ export default function CoinRewardsModal({
                     </div>
                   ) : transactions.length === 0 ? (
                     <p className="text-center text-xs text-zinc-400 py-4">
-                      No coin transactions yet. Claim your check-in or purchase a promoted item!
+                      No obol transactions yet. Claim your check-in or purchase a promoted item!
                     </p>
                   ) : (
                     <div className="space-y-2.5">

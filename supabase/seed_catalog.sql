@@ -7,7 +7,7 @@ truncate table public.products cascade;
 
 -- 2. Insert 88 fashion & accessory items (20% Promoted with Obol rewards)
 insert into public.products (
-  title, brand_name, price, image_url, category, tags, description, is_promoted, promo_label, coin_reward
+  title, brand_name, price, image_url, category, tags, description, is_promoted, promo_label, obol_reward
 )
 values
   ('925 Sterling Silver Cuban Curb Chain', 'Vitaly Design', 85.00, 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=800', 'Accessories', array['jewelry', 'accessories', 'unisex'], 'Heavy-gauge tarnished silver chain necklace with custom carabiner clasp.', true, '🏛️ Partner Brand • +175 Obols', 175),

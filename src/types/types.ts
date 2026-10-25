@@ -4,7 +4,7 @@
 
 export type SwipeDirection = 'left' | 'right';
 export type CartStatus = 'passed' | 'in_cart' | 'purchased' | 'removed';
-export type CoinReason = 'daily_checkin' | 'promo_purchase' | 'review_bonus' | 'redemption';
+export type ObolReason = 'daily_checkin' | 'promo_purchase' | 'review_bonus' | 'redemption';
 
 export interface UserProfile {
   id: string;
@@ -12,7 +12,7 @@ export interface UserProfile {
   display_name: string;
   avatar_url: string;
   bio: string | null;
-  coin_balance: number;
+  obol_balance: number;
   checkin_streak: number;
   last_checkin_date: string | null; // ISO Date string (YYYY-MM-DD)
   created_at: string;
@@ -30,8 +30,8 @@ export interface Product {
   description: string;
   // Gamification / Brand Promo fields
   is_promoted: boolean;
-  promo_label: string | null;       // e.g., "Fall Drop • 3x Coins"
-  coin_reward: number;              // Base coins earned when purchased (0 if not promoted, or e.g. 150)
+  promo_label: string | null;       // e.g., "Fall Drop • 3x Obols"
+  obol_reward: number;              // Base obols earned when purchased (0 if not promoted, or e.g. 150)
   created_at: string;
 }
 
@@ -84,7 +84,7 @@ export interface Purchase {
   user_id: string;
   product_id: string;
   price_paid: number;
-  coins_earned: number;
+  obols_earned: number;
   is_public: boolean;               // Controls whether it shows on /u/[username]
   purchased_at: string;
   // Joined relation for Profile "Recent Purchases" tab
@@ -116,12 +116,12 @@ export interface Review {
   user?: Pick<UserProfile, 'id' | 'username' | 'display_name' | 'avatar_url'>;
 }
 
-export interface CoinTransaction {
+export interface ObolTransaction {
   id: string;
   user_id: string;
   amount: number;                   // Positive for rewards, negative for redemptions
-  reason: CoinReason;
-  description: string;              // e.g., "Purchased Nike Promo Item (+200 coins)"
+  reason: ObolReason;
+  description: string;              // e.g., "Purchased Nike Promo Item (+200 obols)"
   created_at: string;
 }
 
@@ -146,8 +146,8 @@ export interface CheckoutResult {
   success: boolean;
   items_purchased: number;
   total_spent: number;
-  coins_earned: number;
-  new_coin_balance: number;
+  obols_earned: number;
+  new_obol_balance: number;
 }
 
 /**
@@ -156,8 +156,8 @@ export interface CheckoutResult {
 export interface CheckinResult {
   success: boolean;
   already_checked_in: boolean;
-  coins_awarded: number;
+  obols_awarded: number;
   current_streak: number;
-  new_coin_balance: number;
+  new_obol_balance: number;
   message: string;
 }
