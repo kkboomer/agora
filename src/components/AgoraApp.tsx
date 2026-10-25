@@ -20,7 +20,7 @@ import DevNav, { type DevScreen } from '@/components/ui/DevNav';
 import { discountAmount, findDiscount, isRewardCode, setUnlockedCodes } from '@/lib/discounts';
 import { REWARDS, type GiftEntry } from '@/lib/rewards';
 import type { Purchase } from '@/lib/purchases';
-import { DISCOVER_ITEMS, addDbProducts, findProduct } from '@/lib/discoverFeed';
+import { DISCOVER_ITEMS, adaptFeedOnRightSwipe, addDbProducts, findProduct } from '@/lib/discoverFeed';
 import type { Variant } from '@/components/ui/ProductSheet';
 import { timeAgo, type Review } from '@/lib/reviews';
 import { INITIAL_COLLECTIONS, LIKED_ID, type Collection } from '@/lib/collections';
@@ -276,6 +276,7 @@ export default function AgoraApp() {
 
   // Obols: the balance, the rewards claimed and not used yet, and the gift history.
   const [obolBalance, setObolBalance] = useState(0);
+  const [friendMatchBonuses, setFriendMatchBonuses] = useState<string[]>([]);
   const [rewardCodes, setRewardCodes] = useState<string[]>([]);
   const [giftEntries, setGiftEntries] = useState<GiftEntry[]>([]);
   const updateRewardCodes = (codes: string[]) => {
@@ -297,6 +298,7 @@ export default function AgoraApp() {
   useEffect(() => {
     if (session !== 'member') {
       setObolBalance(0);
+      setFriendMatchBonuses([]);
       setRewardCodes([]);
       setUnlockedCodes([]);
       setGiftEntries([]);
@@ -536,7 +538,12 @@ export default function AgoraApp() {
     setOverlay(null);
     setNav(tab);
   };
-  const handleSwipe = async (intent: SwipeIntent, id: string, variant?: Variant) => {
+  const handleSwipe = async (
+    intent: SwipeIntent,
+    id: string,
+    variant?: Variant,
+    friendMatchBonusObols = 0,
+  ) => {
     const productId = findProduct(id)?.productId;
     if (productId && signedIn) {
       const persisted = await recordSwipe(productId, intent === 'reject' ? 'left' : 'right', userId, intent === 'cart');
@@ -549,6 +556,20 @@ export default function AgoraApp() {
       if (alreadyLiked) return;
       if (productId && signedIn && !(await toggleLikedItem(productId, userId))) return;
       setCollections((cs) => cs.map((c) => (c.id === LIKED_ID && !c.itemIds.includes(id) ? { ...c, itemIds: [...c.itemIds, id] } : c)));
+    }
+    if (intent === 'like' || intent === 'cart') {
+      const likedItem = findProduct(id);
+      if (likedItem) {
+        adaptFeedOnRightSwipe(likedItem);
+        setDeckVersion((version) => version + 1);
+      }
+      if (friendMatchBonusObols > 0 && !friendMatchBonuses.includes(id)) {
+        setFriendMatchBonuses((awarded) => [...awarded, id]);
+        if (signedIn) {
+          grantObols(userId, friendMatchBonusObols, 'Friend vibe match bonus', 'friend_match_bonus')
+            .then((balance) => balance !== null && setObolBalance(balance));
+        }
+      }
     }
     if (intent === 'cart') addToCart(id, variant);
   };

@@ -5,6 +5,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { AnimatePresence, animate, motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import Icon from '@/components/ui/Icon';
+import AIRecommendationBadge from '@/components/deck/AIRecommendationBadge';
+import FriendMatchBadge from '@/components/deck/FriendMatchBadge';
 import BottomNav, { type NavTab } from '@/components/ui/BottomNav';
 import type { StyleFilter } from '@/components/screens/SearchScreen';
 import ReviewsSheet from '@/components/ui/ReviewsSheet';
@@ -17,6 +19,7 @@ import type { Collection } from '@/lib/collections';
 import type { Friend } from '@/lib/friends';
 import { reviewsFor, type Review } from '@/lib/reviews';
 import { DISCOVER_ITEMS, type DiscoverItem } from '@/lib/discoverFeed';
+import { getFriendVibeMatch, type FriendActivity } from '@/lib/friendMatch';
 import type { GiftProps } from '@/components/ui/GiftObolsSheet';
 import FilterSheet from '@/components/ui/FilterSheet';
 import { applyStyleQuery } from '@/lib/search';
@@ -82,7 +85,21 @@ interface OptionsState {
   onSize: (size: string) => void;
 }
 
-function CardFace({ item, filter, options, note }: { item: DiscoverItem; filter: StyleFilter | null; options?: OptionsState; note?: string }) {
+function CardFace({
+  item,
+  filter,
+  options,
+  note,
+  showAiBadge = false,
+  friendActivities,
+}: {
+  item: DiscoverItem;
+  filter: StyleFilter | null;
+  options?: OptionsState;
+  note?: string;
+  showAiBadge?: boolean;
+  friendActivities?: FriendActivity[];
+}) {
   // Nothing to choose (one size, at most one colour): just say so, and there's nothing to expand.
   const fixed = item.sizes.length <= 1 && item.colorOptions.length <= 1;
   const summary = options && (options.size || options.color) ? [options.size, options.color].filter(Boolean).join(' · ') : 'View options';
@@ -96,6 +113,8 @@ function CardFace({ item, filter, options, note }: { item: DiscoverItem; filter:
             {note}
           </div>
         )}
+        {showAiBadge && item.aiMatchScore !== undefined && <AIRecommendationBadge item={item} />}
+        {friendActivities && <FriendMatchBadge item={item} friendActivities={friendActivities} />}
         <div className="brand-row">
           <span>{item.brand}</span>
           {filter && <span className="more-hint">· more {(filter.query ?? filter.category ?? '').toLowerCase()} as you scroll</span>}
@@ -205,7 +224,7 @@ interface Props {
   onApplyCode: (code: string | null) => void;
   onCheckout: () => string | null;
   gift: GiftProps;
-  onSwipe: (intent: SwipeIntent, id: string, variant?: Variant) => void;
+  onSwipe: (intent: SwipeIntent, id: string, variant?: Variant, friendMatchBonusObols?: number) => void;
   reviews: Review[];
   filter: StyleFilter | null;
   productFilters: ProductFilters;
@@ -261,6 +280,10 @@ export default function DiscoverScreen({
   const searchRef = useRef<HTMLInputElement>(null);
   const filterCount = activeFilterCount(filters);
   const [optsOpen, setOptsOpen] = useState(false);
+  const [recommendationCadence, setRecommendationCadence] = useState<{
+    feedKey: string;
+    encountered: number;
+  }>({ feedKey: '', encountered: 0 });
   const [color, setColor] = useState<string | null>(null);
   const [size, setSize] = useState<string | null>(null);
   const [drag, setDrag] = useState<DragState>(IDLE);
@@ -304,10 +327,40 @@ export default function DiscoverScreen({
     });
     return notes;
   }, [friends]);
+  const friendActivitiesByItem = new Map<string, FriendActivity[]>();
+  for (const friend of friends) {
+    const friendName = friend.name.split(' ')[0];
+    for (const collection of friend.collections) {
+      const activityType = collection.name === 'Liked items' ? 'liked' : 'saved';
+      for (const itemId of collection.itemIds) {
+        const item = DISCOVER_ITEMS.find((product) => product.id === itemId);
+        if (!item) continue;
+        const itemActivities = friendActivitiesByItem.get(itemId) ?? [];
+        if (!itemActivities.some(
+          (activity) =>
+            activity.friendName === friendName &&
+            activity.activityType === activityType &&
+            activity.collectionName === collection.name,
+        )) {
+          itemActivities.push({
+            friendName,
+            itemTitle: item.title,
+            category: item.category ?? '',
+            brand: item.brand,
+            itemId,
+            activityType,
+            collectionName: collection.name,
+          });
+          friendActivitiesByItem.set(itemId, itemActivities);
+        }
+      }
+    }
+  }
 
   // The deck is the feed narrowed by the filters sheet (a stand-in for querying the API with them),
   // minus anything already swiped. The Friends tab only has what friends liked or saved.
   const friendsTab = feedTab === 'Friends';
+  const feedViewKey = JSON.stringify([feedTab, filter, filters]);
   const feed = useMemo(() => {
     // Database products are pushed onto DISCOVER_ITEMS (same array as the catalog), hence deckVersion.
     const base = friendsTab ? DISCOVER_ITEMS.filter((i) => friendNotes.has(i.id)) : [...DISCOVER_ITEMS];
@@ -322,6 +375,9 @@ export default function DiscoverScreen({
   const empty = remaining.length === 0;
   // When the deck is empty the cards are hidden, but the rest of the screen still needs an item to read from.
   const item = remaining[0] ?? feed[0] ?? NO_ITEM;
+  const encounteredInFeed =
+    recommendationCadence.feedKey === feedViewKey ? recommendationCadence.encountered : 0;
+  const showAiBadge = encounteredInFeed % 5 === 0 && item.aiMatchScore !== undefined;
   const canGoBack = prev !== null && feed.some((i) => i.id === prev);
 
   // Tapping anywhere outside the options collapses them.
@@ -429,12 +485,25 @@ export default function DiscoverScreen({
     const toY = intent === 'cart' ? (y.get() > 0 ? 640 : -640) : y.get();
     await Promise.all([animate(x, toX, exit), animate(y, toY, exit), animate(opacity, 0, exit)]);
 
-    onSwipe(intent, item.id, intent === 'cart' ? { color: chosenColor, size: chosenSize ?? '' } : undefined);
+    const friendMatch = friendsTab
+      ? getFriendVibeMatch(item, friendActivitiesByItem.get(item.id))
+      : { hasMatch: false, bonusObols: 0 };
+    onSwipe(
+      intent,
+      item.id,
+      intent === 'cart' ? { color: chosenColor, size: chosenSize ?? '' } : undefined,
+      friendMatch.hasMatch && (intent === 'like' || intent === 'cart') ? friendMatch.bonusObols : 0,
+    );
     setPrev(item.id);
     // The card behind is already showing the next item, so swap the front card to it
     // and reset in a single paint: no flash, no gap.
     flushSync(() => {
       onSeen(item.id);
+      setRecommendationCadence((current) => ({
+        feedKey: feedViewKey,
+        encountered:
+          (current.feedKey === feedViewKey ? current.encountered : 0) + 1,
+      }));
       setDrag(IDLE);
       setOptsOpen(false);
       setColor(null);
@@ -489,7 +558,12 @@ export default function DiscoverScreen({
         <div className="product-photo">
           {!empty && nextItem && (
             <motion.div className="swipe-card back" aria-hidden="true" style={{ scale: nextScale }}>
-              <CardFace item={nextItem} filter={filter} note={friendsTab ? friendNotes.get(nextItem.id) : undefined} />
+              <CardFace
+                item={nextItem}
+                filter={filter}
+                note={friendsTab ? friendNotes.get(nextItem.id) : undefined}
+                friendActivities={friendsTab ? friendActivitiesByItem.get(nextItem.id) : undefined}
+              />
             </motion.div>
           )}
           {!empty && <motion.div
@@ -505,6 +579,8 @@ export default function DiscoverScreen({
               item={item}
               filter={filter}
               note={friendsTab ? friendNotes.get(item.id) : undefined}
+              showAiBadge={showAiBadge}
+              friendActivities={friendsTab ? friendActivitiesByItem.get(item.id) : undefined}
               options={{
                 open: optsOpen,
                 onToggle: () => setOptsOpen((o) => !o),
