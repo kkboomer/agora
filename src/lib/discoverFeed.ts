@@ -14,6 +14,9 @@ export interface DiscoverItem {
   colors?: number;
   colorOptions: ColorOption[];
   sizes: string[];
+  /** Product tags (sub-category, category, gender) that Browse and search match on. */
+  tags?: string[];
+  category?: string;
   /** Obols earned by buying this (the database's obol_reward). */
   obolReward?: number;
   /** Filterable attributes (see lib/filters.ts). */
@@ -72,6 +75,8 @@ export function addDbProducts(rows: DbProductRow[]): boolean {
       description: row.description ?? row.category,
       price: Number(row.price),
       obolReward: row.obol_reward ?? 0,
+      tags: row.tags ?? [],
+      category: row.category,
       colorOptions: [],
       sizes: SIZES_BY_CATEGORY[row.category] ?? [],
       style: row.tags?.[0],

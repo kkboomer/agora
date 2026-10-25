@@ -11,7 +11,7 @@ import CollectionScreen from '@/components/screens/CollectionScreen';
 import type { Variant } from '@/components/ui/ProductSheet';
 import { collectionCount, tilesOf, type Collection } from '@/lib/collections';
 import type { Friend } from '@/lib/friends';
-import { REVIEWS } from '@/lib/reviews';
+import type { Review } from '@/lib/reviews';
 import { findProduct } from '@/lib/discoverFeed';
 
 interface Props {
@@ -30,9 +30,11 @@ interface Props {
   onToggleLike: (itemId: string) => void;
   guest?: boolean;
   onSignIn: () => void;
+  /** Everyone's reviews (from the database), so a friend's can be listed on their page. */
+  reviews: Review[];
 }
 
-export default function FriendsScreen({ nav, onNav, name, handle, friends, onUnfriend, onAddFriend, onSearchPeople, onAddToCart, cartCount, onOpenCart, isLiked, onToggleLike, guest = false, onSignIn }: Props) {
+export default function FriendsScreen({ nav, onNav, name, handle, friends, onUnfriend, onAddFriend, onSearchPeople, onAddToCart, cartCount, onOpenCart, isLiked, onToggleLike, guest = false, onSignIn, reviews }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const [friendTab, setFriendTab] = useState<'collections' | 'reviews'>('collections');
   const [viewing, setViewing] = useState<Collection | null>(null);
@@ -78,7 +80,7 @@ export default function FriendsScreen({ nav, onNav, name, handle, friends, onUnf
     );
   }
 
-  const friendReviews = friend ? REVIEWS.filter((r) => r.user === friend.tag.slice(1)) : [];
+  const friendReviews = friend ? reviews.filter((r) => r.user === friend.tag.slice(1)) : [];
 
   return (
     <main className="app-shell">
