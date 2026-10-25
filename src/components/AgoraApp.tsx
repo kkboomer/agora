@@ -27,6 +27,7 @@ import { INITIAL_COLLECTIONS, LIKED_ID, type Collection } from '@/lib/collection
 import { AVATAR_COLORS, cartItemIdFor, sortLikedFirst, toUiCollection, toUiFriend } from '@/lib/accountMapping';
 import { currentUser, signIn, signOut, signUp, type AuthUser } from '@/lib/supabase/auth';
 import { fetchGifts, fetchObolBalance, fetchRewardLog, spendObols, markRewardUsed, fetchAllReviews, fetchPurchases, recordPurchases, submitReview, fetchAllProducts, updateDarkMode, updateDisplayName, addFriendship, removeFriendship, searchProfiles, fetchAvatar, fetchCartItems, fetchCollections, fetchFriendsWithCollections, giftObols, grantObols, recordSwipe, removeAvatar, removeCartLine, saveCartLine, removeFromCart, toggleLikedItem, uploadAvatar } from '@/lib/supabase/api';
+import { createCollectionRow, deleteCollectionRow, toggleCollectionItem, updateCollectionRow } from '@/lib/supabase/api';
 import { DEMO_USER_ID, isSupabaseConfigured } from '@/lib/supabase/client';
 
 /** Screens that sit outside the bottom-nav tabs. */
@@ -199,7 +200,7 @@ export default function AgoraApp() {
         setLikedSynced(userId);
       });
     if (userId === DEMO_USER_ID) fetchAvatar(userId).then((url) => url && setUserPhoto(url));
-  }, [session, userId]);
+  }, [session, userId, deckVersion]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = darkMode ? 'dark' : 'light';
@@ -208,7 +209,7 @@ export default function AgoraApp() {
   // Orders and reviews come from the database once a member is in (and the product list has loaded, to match them to items).
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [otherReviews, setOtherReviews] = useState<Review[]>([]);
-  useEffect(() => {
+  const loadReviewsAndOrders = () => {
     if (!isSupabaseConfigured || deckVersion === 0) return;
     const toItemId = (productId: string) => cartItemIdFor(productId);
     fetchAllReviews().then((rows) => {
@@ -244,7 +245,7 @@ export default function AgoraApp() {
         }),
       ),
     );
-  }, [session, userId, deckVersion]);
+  };
 
   const cartCount = cart.reduce((n, e) => n + e.qty, 0);
   const cartLines = cart.flatMap((e) => {
@@ -275,6 +276,7 @@ export default function AgoraApp() {
 
   // Obols: the balance, the rewards claimed and not used yet, and the gift history.
   const [obolBalance, setObolBalance] = useState(0);
+  const [friendMatchBonuses, setFriendMatchBonuses] = useState<string[]>([]);
   const [rewardCodes, setRewardCodes] = useState<string[]>([]);
   const [giftEntries, setGiftEntries] = useState<GiftEntry[]>([]);
   const updateRewardCodes = (codes: string[]) => {
@@ -296,6 +298,7 @@ export default function AgoraApp() {
   useEffect(() => {
     if (session !== 'member') {
       setObolBalance(0);
+      setFriendMatchBonuses([]);
       setRewardCodes([]);
       setUnlockedCodes([]);
       setGiftEntries([]);
@@ -313,6 +316,34 @@ export default function AgoraApp() {
     });
     refreshObols();
   }, [session, userId]);
+
+  // Whatever screen you're on, its data is fetched again when you open it, come back to the tab, or reload, so
+  // things other people did (a new review, a new friend, a gift) show up without logging out.
+  const loadFriends = () => {
+    if (!isSupabaseConfigured || session !== 'member' || deckVersion === 0) return;
+    fetchFriendsWithCollections(userId).then((rows) => {
+      const mapped = rows.map(toUiFriend);
+      baseline.current.friends = mapped;
+      setFriends(mapped);
+    });
+  };
+  const refreshAll = () => {
+    loadReviewsAndOrders();
+    loadFriends();
+    refreshObols();
+  };
+  const refreshLatest = useRef(refreshAll);
+  useEffect(() => {
+    refreshLatest.current = refreshAll;
+  });
+  useEffect(() => {
+    refreshLatest.current();
+  }, [nav, overlay, session, userId, deckVersion]);
+  useEffect(() => {
+    const onFocus = () => refreshLatest.current();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []);
 
   const claimReward = async (rewardId: string): Promise<string | null> => {
     const reward = REWARDS.find((r) => r.id === rewardId);
@@ -412,9 +443,11 @@ export default function AgoraApp() {
 
   // Only "Liked items" is saved to Supabase so far. Other collections change locally.
   const toggleInCollection = async (collectionId: string, itemId: string) => {
-    if (collectionId === LIKED_ID) {
-      const productId = findProduct(itemId)?.productId;
-      if (productId && signedIn) await toggleLikedItem(productId, userId);
+    const productId = findProduct(itemId)?.productId;
+    if (productId && signedIn) {
+      if (collectionId === LIKED_ID) await toggleLikedItem(productId, userId);
+      // A collection still being created has a temporary "c-" id and no database row yet.
+      else if (!collectionId.startsWith('c-')) await toggleCollectionItem(collectionId, productId);
     }
     setCollections((cs) =>
       cs.map((c) =>
@@ -425,14 +458,41 @@ export default function AgoraApp() {
     );
   };
   const isLiked = (itemId: string) => collections.some((c) => c.id === LIKED_ID && c.itemIds.includes(itemId));
-  const createCollection = (name: string, itemId: string, isPrivate: boolean) =>
-    setCollections((cs) => [...cs, { id: `c-${Date.now()}`, name, isPrivate, pieces: [], itemIds: [itemId] }]);
-
-  const createEmptyCollection = (name: string, isPrivate: boolean) =>
-    setCollections((cs) => [...cs, { id: `c-${Date.now()}`, name, isPrivate, pieces: [], itemIds: [] }]);
-  const updateCollection = (id: string, patch: Partial<Pick<Collection, 'name' | 'isPrivate'>>) =>
+  // New collections show up straight away, then get a database row; the row's id replaces the temporary one.
+  const saveNewCollection = async (tempId: string, name: string, isPrivate: boolean, itemId?: string) => {
+    if (!signedIn) return;
+    let made = await createCollectionRow(userId, name, !isPrivate);
+    let finalName = name;
+    if (!made.id && made.code === '23505') {
+      // You already have one with that name: keep both by numbering the new one.
+      finalName = `${name} 2`;
+      made = await createCollectionRow(userId, finalName, !isPrivate);
+    }
+    const id = made.id;
+    if (!id) return;
+    setCollections((cs) => cs.map((c) => (c.id === tempId ? { ...c, id, name: finalName } : c)));
+    setOpenCollectionId((open) => (open === tempId ? id : open));
+    const productId = itemId ? findProduct(itemId)?.productId : undefined;
+    if (productId) toggleCollectionItem(id, productId);
+  };
+  const createCollection = (name: string, itemId: string, isPrivate: boolean) => {
+    const id = `c-${Date.now()}`;
+    setCollections((cs) => [...cs, { id, name, isPrivate, pieces: [], itemIds: [itemId] }]);
+    saveNewCollection(id, name, isPrivate, itemId);
+  };
+  const createEmptyCollection = (name: string, isPrivate: boolean) => {
+    const id = `c-${Date.now()}`;
+    setCollections((cs) => [...cs, { id, name, isPrivate, pieces: [], itemIds: [] }]);
+    saveNewCollection(id, name, isPrivate);
+  };
+  const updateCollection = (id: string, patch: Partial<Pick<Collection, 'name' | 'isPrivate'>>) => {
     setCollections((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+    if (signedIn && !id.startsWith('c-')) {
+      updateCollectionRow(userId, id, { name: patch.name, isPublic: patch.isPrivate === undefined ? undefined : !patch.isPrivate });
+    }
+  };
   const deleteCollection = (id: string) => {
+    if (signedIn && !id.startsWith('c-') && id !== LIKED_ID) deleteCollectionRow(userId, id);
     setCollections((cs) => cs.filter((c) => c.id !== id));
     setOverlay(null);
     setOpenCollectionId(null);
@@ -478,7 +538,12 @@ export default function AgoraApp() {
     setOverlay(null);
     setNav(tab);
   };
-  const handleSwipe = async (intent: SwipeIntent, id: string, variant?: Variant) => {
+  const handleSwipe = async (
+    intent: SwipeIntent,
+    id: string,
+    variant?: Variant,
+    friendMatchBonusObols = 0,
+  ) => {
     const productId = findProduct(id)?.productId;
     if (productId && signedIn) {
       const persisted = await recordSwipe(productId, intent === 'reject' ? 'left' : 'right', userId, intent === 'cart');
@@ -498,11 +563,19 @@ export default function AgoraApp() {
         adaptFeedOnRightSwipe(likedItem);
         setDeckVersion((version) => version + 1);
       }
+      if (friendMatchBonusObols > 0 && !friendMatchBonuses.includes(id)) {
+        setFriendMatchBonuses((awarded) => [...awarded, id]);
+        if (signedIn) {
+          grantObols(userId, friendMatchBonusObols, 'Friend vibe match bonus', 'friend_match_bonus')
+            .then((balance) => balance !== null && setObolBalance(balance));
+        }
+      }
     }
     if (intent === 'cart') addToCart(id, variant);
   };
   const runSearch = (query: string) => {
     setFilter(query ? { query } : null);
+    setFeedTab('For You');
     goTo('discover');
   };
   const seeAll = (tab: FeedTab) => {
@@ -529,6 +602,7 @@ export default function AgoraApp() {
 
   const friendsScreen = () => (
         <FriendsScreen
+            reviews={otherReviews}
             guest={!signedIn}
             onSignIn={goToSignIn}
             nav="profile"
@@ -641,6 +715,7 @@ export default function AgoraApp() {
           onSearch={runSearch}
           onSelect={(f) => {
             setFilter(f);
+            setFeedTab('For You');
             goTo('discover');
           }}
         />
@@ -705,6 +780,7 @@ export default function AgoraApp() {
             seen={seen}
             onSeen={(id) => updateSeen(seen.includes(id) ? seen : [...seen, id])}
             onUnsee={(id) => updateSeen(seen.filter((x) => x !== id))}
+            onResetSeen={() => updateSeen([])}
             deckVersion={deckVersion}
             guest={!signedIn}
             onSignIn={goToSignIn}

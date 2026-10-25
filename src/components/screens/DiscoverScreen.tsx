@@ -19,15 +19,34 @@ import type { Collection } from '@/lib/collections';
 import type { Friend } from '@/lib/friends';
 import { reviewsFor, type Review } from '@/lib/reviews';
 import { DISCOVER_ITEMS, type DiscoverItem } from '@/lib/discoverFeed';
-import type { FriendActivity } from '@/lib/friendMatch';
+import { getFriendVibeMatch, type FriendActivity } from '@/lib/friendMatch';
 import type { GiftProps } from '@/components/ui/GiftObolsSheet';
 import FilterSheet from '@/components/ui/FilterSheet';
+import { applyStyleQuery } from '@/lib/search';
 import { activeFilterCount, matchesFilters, type ProductFilters } from '@/lib/filters';
 
 export type SwipeIntent = 'like' | 'reject' | 'cart';
 
 /** Stands in when the deck is empty: the cards are hidden then, but the rest of the screen reads from an item. */
 const NO_ITEM: DiscoverItem = { id: '', brand: '', title: '', description: '', price: 0, colorOptions: [], sizes: [], image: '', alt: '', focus: 'center' };
+
+/** A repeatable shuffle: the same seed always gives the same order, so the deck doesn't reshuffle on every render. */
+function shuffled<T>(list: T[], seed: number): T[] {
+  let a = seed >>> 0;
+  const random = () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const out = [...list];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
 
 const filterLabel = (f: StyleFilter) => (f.query ? `“${f.query}”` : `${f.gender === 'men' ? 'Men’s' : 'Women’s'} ${f.category}`);
 
@@ -187,6 +206,8 @@ interface Props {
   seen: string[];
   onSeen: (id: string) => void;
   onUnsee: (id: string) => void;
+  /** Forget what's been swiped, so everything can be browsed again. */
+  onResetSeen: () => void;
   /** Changes when products are added to the deck, so the feed is rebuilt. */
   deckVersion?: number;
   nav: NavTab;
@@ -203,7 +224,7 @@ interface Props {
   onApplyCode: (code: string | null) => void;
   onCheckout: () => string | null;
   gift: GiftProps;
-  onSwipe: (intent: SwipeIntent, id: string, variant?: Variant) => void;
+  onSwipe: (intent: SwipeIntent, id: string, variant?: Variant, friendMatchBonusObols?: number) => void;
   reviews: Review[];
   filter: StyleFilter | null;
   productFilters: ProductFilters;
@@ -219,6 +240,7 @@ export default function DiscoverScreen({
   seen,
   onSeen,
   onUnsee,
+  onResetSeen,
   deckVersion = 0,
   nav,
   onNav,
@@ -245,6 +267,8 @@ export default function DiscoverScreen({
   onClearFilter,
 }: Props) {
   // The one item you can step back to. Stepping back clears it, so it only ever goes back once.
+  // Bumped by "Reload items": reshuffles the deck (0 keeps the normal order).
+  const [shuffleSeed, setShuffleSeed] = useState(0);
   const [prev, setPrev] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
@@ -307,17 +331,25 @@ export default function DiscoverScreen({
   for (const friend of friends) {
     const friendName = friend.name.split(' ')[0];
     for (const collection of friend.collections) {
+      const activityType = collection.name === 'Liked items' ? 'liked' : 'saved';
       for (const itemId of collection.itemIds) {
         const item = DISCOVER_ITEMS.find((product) => product.id === itemId);
         if (!item) continue;
         const itemActivities = friendActivitiesByItem.get(itemId) ?? [];
-        if (!itemActivities.some((activity) => activity.friendName === friendName)) {
+        if (!itemActivities.some(
+          (activity) =>
+            activity.friendName === friendName &&
+            activity.activityType === activityType &&
+            activity.collectionName === collection.name,
+        )) {
           itemActivities.push({
             friendName,
             itemTitle: item.title,
             category: item.category ?? '',
             brand: item.brand,
             itemId,
+            activityType,
+            collectionName: collection.name,
           });
           friendActivitiesByItem.set(itemId, itemActivities);
         }
@@ -331,11 +363,14 @@ export default function DiscoverScreen({
   const feedViewKey = JSON.stringify([feedTab, filter, filters]);
   const feed = useMemo(() => {
     // Database products are pushed onto DISCOVER_ITEMS (same array as the catalog), hence deckVersion.
-    const pool = friendsTab ? DISCOVER_ITEMS.filter((i) => friendNotes.has(i.id)) : [...DISCOVER_ITEMS];
+    const base = friendsTab ? DISCOVER_ITEMS.filter((i) => friendNotes.has(i.id)) : [...DISCOVER_ITEMS];
+    // A Browse category or search is strict: no matches means no cards, not "everything".
+    const pool = filter ? applyStyleQuery(base, filter) : base;
     const matches = pool.filter((i) => matchesFilters(i, filters));
-    return matches.length ? matches : pool;
+    const ordered = matches.length || filter ? matches : pool;
+    return shuffleSeed ? shuffled(ordered, shuffleSeed) : ordered;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, deckVersion, friendsTab, friendNotes]);
+  }, [filters, filter, deckVersion, friendsTab, friendNotes, shuffleSeed]);
   const remaining = useMemo(() => feed.filter((i) => !seen.includes(i.id)), [feed, seen]);
   const empty = remaining.length === 0;
   // When the deck is empty the cards are hidden, but the rest of the screen still needs an item to read from.
@@ -450,7 +485,15 @@ export default function DiscoverScreen({
     const toY = intent === 'cart' ? (y.get() > 0 ? 640 : -640) : y.get();
     await Promise.all([animate(x, toX, exit), animate(y, toY, exit), animate(opacity, 0, exit)]);
 
-    onSwipe(intent, item.id, intent === 'cart' ? { color: chosenColor, size: chosenSize ?? '' } : undefined);
+    const friendMatch = friendsTab
+      ? getFriendVibeMatch(item, friendActivitiesByItem.get(item.id))
+      : { hasMatch: false, bonusObols: 0 };
+    onSwipe(
+      intent,
+      item.id,
+      intent === 'cart' ? { color: chosenColor, size: chosenSize ?? '' } : undefined,
+      friendMatch.hasMatch && (intent === 'like' || intent === 'cart') ? friendMatch.bonusObols : 0,
+    );
     setPrev(item.id);
     // The card behind is already showing the next item, so swap the front card to it
     // and reset in a single paint: no flash, no gap.
@@ -563,6 +606,13 @@ export default function DiscoverScreen({
                   <p>When your friends like or save pieces, they’ll show up here.</p>
                   <button className="deck-empty-primary" onClick={() => onFeedTab('For You')}>Browse Discover</button>
                 </>
+              ) : feed.length === 0 && filter ? (
+                <>
+                  <h2>No matches</h2>
+                  <p>Nothing found for {filterLabel(filter)}. Try a different word, or browse by category.</p>
+                  <button className="deck-empty-primary" onClick={onClearFilter}>Clear search</button>
+                  <button onClick={() => onNav('closet')}>Browse categories</button>
+                </>
               ) : feed.length === 0 ? (
                 <>
                   <h2>No products yet</h2>
@@ -571,8 +621,18 @@ export default function DiscoverScreen({
               ) : (
                 <>
                   <h2>You’ve seen it all</h2>
-                  <p>No new pieces here right now. Browse by category to find more.</p>
-                  <button className="deck-empty-primary" onClick={() => onNav('closet')}>Discover new items</button>
+                  <p>You’ve gone through everything here. Reload to shuffle it all and look again, or browse by category.</p>
+                  <button
+                    className="deck-empty-primary"
+                    onClick={() => {
+                      onResetSeen();
+                      setPrev(null);
+                      setShuffleSeed(Date.now());
+                    }}
+                  >
+                    Reload items
+                  </button>
+                  <button onClick={() => onNav('closet')}>Discover new items</button>
                 </>
               )}
             </div>

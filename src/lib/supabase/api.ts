@@ -554,10 +554,17 @@ export async function fetchAllReviews(): Promise<ReviewRow[]> {
   if (!isSupabaseConfigured) return [];
   const { data, error } = await supabase
     .from('reviews')
-    .select('id, user_id, product_id, rating, comment, created_at, user:profiles(username)')
+    .select('id, user_id, product_id, rating, comment, created_at')
     .order('created_at', { ascending: false });
   if (error) console.error('Error loading reviews:', why(error));
-  return error || !data ? [] : (data as unknown as ReviewRow[]);
+  if (error || !data) return [];
+
+  // Usernames come from a second, plain query rather than a joined one, so a missing relationship can't blank them all out.
+  const ids = [...new Set(data.map((r) => r.user_id as string))];
+  const { data: profiles, error: profileError } = await supabase.from('profiles').select('id, username').in('id', ids);
+  if (profileError) console.error('Error loading reviewers:', why(profileError));
+  const nameOf = new Map((profiles ?? []).map((p) => [p.id as string, p.username as string]));
+  return data.map((r) => ({ ...r, user: nameOf.has(r.user_id) ? { username: nameOf.get(r.user_id)! } : null })) as ReviewRow[];
 }
 
 /** Adds obols to a member's balance (and logs it). Returns the new balance, or null if it failed. */
@@ -629,4 +636,46 @@ export async function fetchRewardLog(userId: string): Promise<{ amount: number; 
   if (!isSupabaseConfigured) return [];
   const { data, error } = await supabase.from('obol_transactions').select('amount, description').eq('user_id', userId).eq('reason', 'redemption');
   return error || !data ? [] : data;
+}
+
+const LIKED_COLLECTION_NAME = 'Liked items';
+
+/** Creates a collection. Returns its id, or null (with a code like 23505 for "that name is taken") if it failed. */
+export async function createCollectionRow(userId: string, name: string, isPublic: boolean): Promise<{ id: string | null; code?: string }> {
+  if (!isSupabaseConfigured) return { id: null };
+  const { data, error } = await supabase.from('collections').insert({ user_id: userId, name, is_public: isPublic }).select('id').single();
+  if (error) console.error('Error creating collection:', why(error));
+  return error || !data ? { id: null, code: error?.code } : { id: data.id as string };
+}
+
+/** Renames a collection or changes its privacy. `id` can be the app's "liked" id for the Liked items collection. */
+export async function updateCollectionRow(userId: string, id: string, patch: { name?: string; isPublic?: boolean }): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const fields: Record<string, unknown> = {};
+  if (patch.name !== undefined) fields.name = patch.name;
+  if (patch.isPublic !== undefined) fields.is_public = patch.isPublic;
+  let query = supabase.from('collections').update(fields).eq('user_id', userId);
+  query = id === 'liked' ? query.eq('name', LIKED_COLLECTION_NAME) : query.eq('id', id);
+  const { error } = await query;
+  if (error) console.error('Error updating collection:', why(error));
+  return !error;
+}
+
+export async function deleteCollectionRow(userId: string, id: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const { error } = await supabase.from('collections').delete().eq('user_id', userId).eq('id', id);
+  if (error) console.error('Error deleting collection:', why(error));
+  return !error;
+}
+
+/** Puts a product in a collection, or takes it out if it's already there. */
+export async function toggleCollectionItem(collectionId: string, productId: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const { data: existing, error: lookupError } = await supabase.from('collection_items').select('id').eq('collection_id', collectionId).eq('product_id', productId).maybeSingle();
+  if (lookupError) return false;
+  const result = existing
+    ? await supabase.from('collection_items').delete().eq('id', existing.id)
+    : await supabase.from('collection_items').insert({ collection_id: collectionId, product_id: productId });
+  if (result.error) console.error('Error saving collection item:', why(result.error));
+  return !result.error;
 }

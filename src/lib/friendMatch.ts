@@ -6,6 +6,8 @@ export interface FriendActivity {
   category: string;
   brand: string;
   itemId?: string;
+  activityType?: 'liked' | 'saved';
+  collectionName?: string;
 }
 
 const FRIEND_ACTIVITIES: FriendActivity[] = [
@@ -49,20 +51,26 @@ export function getFriendVibeMatch(
   item: DiscoverItem,
   friendActivities: FriendActivity[] = FRIEND_ACTIVITIES,
 ): { hasMatch: boolean; matchText: string; bonusObols: number } {
-  const match = friendActivities.find(
+  const exactMatch = friendActivities.find((activity) => activity.itemId === item.id);
+  const similarMatch = friendActivities.find(
     (activity) =>
-      activity.itemId === item.id ||
-      (brandsMatch(item.brand, activity.brand) &&
-        categoriesMatch(item.category, activity.category)),
+      brandsMatch(item.brand, activity.brand) &&
+      categoriesMatch(item.category, activity.category),
   );
+  const match = exactMatch ?? similarMatch;
 
   if (!match) {
     return { hasMatch: false, matchText: '', bonusObols: 0 };
   }
 
+  const liked = match.activityType !== 'saved';
+  const exactItemMatch = match.itemId === item.id;
+  let actionText = `saved ${match.brand}${match.collectionName ? ` to ${match.collectionName}` : ''}`;
+  if (liked) actionText = exactItemMatch ? 'liked this' : `likes ${match.brand}`;
+  else if (exactItemMatch) actionText = `saved this${match.collectionName ? ` to ${match.collectionName}` : ''}`;
   return {
     hasMatch: true,
-    matchText: `${match.friendName} loves ${match.brand} — Duo Vibe Match!`,
+    matchText: `${match.friendName} ${actionText} — Duo Vibe Match!`,
     bonusObols: 150,
   };
 }
