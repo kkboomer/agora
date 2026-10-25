@@ -554,6 +554,7 @@ export default function AgoraApp() {
   };
   const runSearch = (query: string) => {
     setFilter(query ? { query } : null);
+    setFeedTab('For You');
     goTo('discover');
   };
   const seeAll = (tab: FeedTab) => {
@@ -693,6 +694,7 @@ export default function AgoraApp() {
           onSearch={runSearch}
           onSelect={(f) => {
             setFilter(f);
+            setFeedTab('For You');
             goTo('discover');
           }}
         />
