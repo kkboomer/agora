@@ -85,6 +85,20 @@ interface OptionsState {
   onSize: (size: string) => void;
 }
 
+/** The AI and friend badges. They share one anchor, so their details open in the same spot, and only one is open at a time. */
+function Badges({ item, showAiBadge, friendActivities }: { item: DiscoverItem; showAiBadge: boolean; friendActivities?: FriendActivity[] }) {
+  const [open, setOpen] = useState<'ai' | 'friend' | null>(null);
+  const showAi = showAiBadge && item.aiMatchScore !== undefined;
+  if (!showAi && !friendActivities) return null;
+  const toggle = (badge: 'ai' | 'friend') => setOpen((current) => (current === badge ? null : badge));
+  return (
+    <div className="relative">
+      {showAi && <AIRecommendationBadge item={item} expanded={open === 'ai'} onToggle={() => toggle('ai')} />}
+      {friendActivities && <FriendMatchBadge item={item} friendActivities={friendActivities} expanded={open === 'friend'} onToggle={() => toggle('friend')} />}
+    </div>
+  );
+}
+
 function CardFace({
   item,
   filter,
@@ -113,8 +127,7 @@ function CardFace({
             {note}
           </div>
         )}
-        {showAiBadge && item.aiMatchScore !== undefined && <AIRecommendationBadge item={item} />}
-        {friendActivities && <FriendMatchBadge item={item} friendActivities={friendActivities} />}
+        <Badges key={item.id} item={item} showAiBadge={showAiBadge} friendActivities={friendActivities} />
         <div className="brand-row">
           <span>{item.brand}</span>
           {filter && <span className="more-hint">· more {(filter.query ?? filter.category ?? '').toLowerCase()} as you scroll</span>}

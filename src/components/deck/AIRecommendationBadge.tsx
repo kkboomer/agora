@@ -1,23 +1,22 @@
 'use client';
 
-import { useState } from 'react';
-import { ChevronDown, Coins, ShieldCheck, Sparkles } from 'lucide-react';
+import { ChevronDown, Coins, Sparkles } from 'lucide-react';
 import type { DiscoverItem } from '@/lib/discoverFeed';
 
 interface AIRecommendationBadgeProps {
   item: DiscoverItem;
+  expanded: boolean;
+  onToggle: () => void;
 }
 
-export default function AIRecommendationBadge({ item }: AIRecommendationBadgeProps) {
-  const [expanded, setExpanded] = useState(false);
-
+export default function AIRecommendationBadge({ item, expanded, onToggle }: AIRecommendationBadgeProps) {
   return (
-    <div className="relative mb-2.5 mr-2 inline-flex max-w-[320px] select-none flex-col align-top pointer-events-auto opacity-100">
+    <div className="mb-2.5 mr-2 inline-flex max-w-[320px] select-none flex-col align-top pointer-events-auto opacity-100">
       <button
         type="button"
         onClick={(event) => {
           event.stopPropagation();
-          setExpanded((previous) => !previous);
+          onToggle();
         }}
         onPointerDown={(event) => event.stopPropagation()}
         className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-black/50 text-[#F5C6B8] shadow-lg backdrop-blur-md transition-colors hover:bg-black/65"
@@ -50,20 +49,6 @@ export default function AIRecommendationBadge({ item }: AIRecommendationBadgePro
               {item.aiReason}
             </p>
           )}
-          <div className="mt-2 space-y-1 border-t border-white/15 pt-2 text-[10px] text-white/80">
-            <span className="flex items-center gap-1 font-semibold text-white/95">
-              <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
-              Explainable AI Taste Signals
-            </span>
-            <ul className="list-disc space-y-0.5 pl-4">
-              {(item.aiSignals ?? []).map((signal, index) => (
-                <li key={`${signal}-${index}`}>{signal}</li>
-              ))}
-            </ul>
-            <span className="block pt-0.5 text-[9px] text-emerald-300/90">
-              ✓ Visa Responsible AI • On-session learning • 0 Payment PII used
-            </span>
-          </div>
         </div>
       )}
     </div>

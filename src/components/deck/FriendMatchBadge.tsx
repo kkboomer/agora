@@ -1,27 +1,27 @@
 'use client';
 
 import { ChevronDown, Coins, Sparkles, Users } from 'lucide-react';
-import { useState } from 'react';
 import type { DiscoverItem } from '@/lib/discoverFeed';
 import { getFriendVibeMatch, type FriendActivity } from '@/lib/friendMatch';
 
 interface FriendMatchBadgeProps {
   item: DiscoverItem;
   friendActivities?: FriendActivity[];
+  expanded: boolean;
+  onToggle: () => void;
 }
 
-export default function FriendMatchBadge({ item, friendActivities }: FriendMatchBadgeProps) {
-  const [expanded, setExpanded] = useState(false);
+export default function FriendMatchBadge({ item, friendActivities, expanded, onToggle }: FriendMatchBadgeProps) {
   const { hasMatch, matchText, bonusObols } = getFriendVibeMatch(item, friendActivities);
   if (!hasMatch) return null;
 
   return (
-    <div className="relative mb-2.5 mr-2 inline-flex max-w-[320px] select-none flex-col align-top pointer-events-auto opacity-100">
+    <div className="mb-2.5 mr-2 inline-flex max-w-[320px] select-none flex-col align-top pointer-events-auto opacity-100">
       <button
         type="button"
         onClick={(event) => {
           event.stopPropagation();
-          setExpanded((previous) => !previous);
+          onToggle();
         }}
         onPointerDown={(event) => event.stopPropagation()}
         className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-purple-300/35 bg-indigo-950/70 text-purple-200 shadow-lg backdrop-blur-md transition-colors hover:bg-indigo-900/80"
