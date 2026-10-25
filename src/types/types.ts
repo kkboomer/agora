@@ -55,6 +55,9 @@ export interface CartItem {
   id: string;
   user_id: string;
   product_id: string;
+  quantity?: number;
+  color?: string;
+  size?: string;
   created_at: string;
   product?: Product;
 }

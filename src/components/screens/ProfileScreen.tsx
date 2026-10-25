@@ -10,7 +10,7 @@ import BottomSheet from '@/components/ui/BottomSheet';
 import BottomNav, { type NavTab } from '@/components/ui/BottomNav';
 import { findProduct } from '@/lib/discoverFeed';
 import { LIKED_ID, collectionCount, tilesOf, type Collection } from '@/lib/collections';
-import { PURCHASES } from '@/lib/purchases';
+import type { Purchase } from '@/lib/purchases';
 import type { Review } from '@/lib/reviews';
 import { money } from '@/components/screens/CartScreen';
 
@@ -29,9 +29,10 @@ interface Props {
   /** The signed-in user's reviews, keyed by item id. */
   myReviews: Record<string, Review>;
   onSaveReview: (itemId: string, rating: number, text: string) => void;
+  purchases: Purchase[];
 }
 
-export default function ProfileScreen({ nav, onNav, collections, onOpenCollection, onCreateCollection, name, photo, guest = false, onSignIn, onOpenSettings, myReviews, onSaveReview }: Props) {
+export default function ProfileScreen({ nav, onNav, collections, onOpenCollection, onCreateCollection, name, photo, guest = false, onSignIn, onOpenSettings, myReviews, onSaveReview, purchases }: Props) {
   const [profileTab, setProfileTab] = useState<'collections' | 'purchased'>('collections');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [rating, setRating] = useState(0);
@@ -116,7 +117,7 @@ export default function ProfileScreen({ nav, onNav, collections, onOpenCollectio
                   <p>Your orders and reviews live in your account.</p>
                   <button onClick={onSignIn}>Log in / Sign up</button>
                 </div>
-              ) : PURCHASES.length === 0 ? (
+              ) : purchases.length === 0 ? (
                 <div className="saved-empty">
                   <span><Icon name="gift" size={26} /></span>
                   <h2>No purchases yet</h2>
@@ -124,7 +125,7 @@ export default function ProfileScreen({ nav, onNav, collections, onOpenCollectio
                   <button onClick={() => onNav('discover')}>Explore pieces</button>
                 </div>
               ) : (
-                PURCHASES.map((p) => {
+                purchases.map((p) => {
                   const item = findProduct(p.itemId);
                   if (!item) return null;
                   const mine = myReviews[item.id];

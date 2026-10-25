@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import BottomSheet from './BottomSheet';
 import Icon from './Icon';
-import { money, type CartLine } from '@/components/screens/CartScreen';
+import { money, OrderPlaced, type CartLine } from '@/components/screens/CartScreen';
 import { discountAmount, findDiscount } from '@/lib/discounts';
 
 interface Props {
@@ -14,10 +14,14 @@ interface Props {
   onChangeQty: (key: string, delta: 1 | -1) => void;
   appliedCode: string | null;
   onApplyCode: (code: string | null) => void;
+  /** Mock checkout: resolves to a reason it didn't go through, or null when the order is placed. */
+  onCheckout: () => string | null;
 }
 
 /** Cart as a popup sheet: scrollable pieces, with discount and checkout pinned underneath. */
-export default function CartSheet({ open, onClose, lines, onChangeQty, appliedCode, onApplyCode }: Props) {
+export default function CartSheet({ open, onClose, lines, onChangeQty, appliedCode, onApplyCode, onCheckout }: Props) {
+  const [done, setDone] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [promoOpen, setPromoOpen] = useState(false);
   const [input, setInput] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -40,15 +44,24 @@ export default function CartSheet({ open, onClose, lines, onChangeQty, appliedCo
     onApplyCode(found.code);
   };
 
+  // Every way of closing the sheet goes through here, so the next visit starts on the cart, not the receipt.
+  const close = () => {
+    setDone(false);
+    setCheckoutError(null);
+    onClose();
+  };
+
   return (
     <BottomSheet
       open={open}
-      onClose={onClose}
+      onClose={close}
       label="Shopping cart"
       height="70%"
       title={<div><h2>Cart</h2><p className="sheet-sub">{count} {count === 1 ? 'item' : 'items'}</p></div>}
     >
-      {lines.length === 0 ? (
+      {done ? (
+        <OrderPlaced onDone={close} />
+      ) : lines.length === 0 ? (
         <div className="saved-empty cart-sheet-empty">
           <span><Icon name="cart" size={26} /></span>
           <h2>Your cart is empty</h2>
@@ -121,7 +134,18 @@ export default function CartSheet({ open, onClose, lines, onChangeQty, appliedCo
               <div className="cart-line saving"><span>Discount</span><span>−{money(saving)}</span></div>
             )}
             <div className="cart-total"><span>Total</span><strong>{money(subtotal - saving)}</strong></div>
-            <button type="button" className="checkout-btn">Checkout</button>
+            {checkoutError && <p className="promo-error" role="alert">{checkoutError}</p>}
+            <button
+              type="button"
+              className="checkout-btn"
+              onClick={() => {
+                const reason = onCheckout();
+                setCheckoutError(reason);
+                if (!reason) setDone(true);
+              }}
+            >
+              Checkout
+            </button>
           </div>
         </>
       )}

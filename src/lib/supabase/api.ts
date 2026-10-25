@@ -73,14 +73,7 @@ export async function recordSwipe(
     { onConflict: 'user_id,product_id' }
   );
 
-  if (!error && addToCart) {
-    const { error: cartError } = await supabase
-      .from('cart_items')
-      .upsert({ user_id: userId, product_id: productId }, { onConflict: 'user_id,product_id' });
-    if (cartError) console.error('Error adding product to cart:', cartError);
-    return !cartError;
-  }
-
+  // The cart line itself (with its size, colour and quantity) is saved by saveCartLine.
   if (error) console.error('Error recording swipe:', error);
   return !error;
 }
@@ -101,6 +94,24 @@ export async function fetchCartItems(
 
   if (error || !data) return [];
   return data as (CartItem & { product: Product })[];
+}
+
+/** Saves one cart line (a product in a colour and size) with its quantity. */
+export async function saveCartLine(userId: string, productId: string, color: string, size: string, quantity: number): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const { error } = await supabase
+    .from('cart_items')
+    .upsert({ user_id: userId, product_id: productId, color, size, quantity }, { onConflict: 'user_id,product_id,color,size' });
+  if (error) console.error('Error saving cart item:', error);
+  return !error;
+}
+
+/** Removes one cart line, leaving the same product in other sizes alone. */
+export async function removeCartLine(userId: string, productId: string, color: string, size: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const { error } = await supabase.from('cart_items').delete().eq('user_id', userId).eq('product_id', productId).eq('color', color).eq('size', size);
+  if (error) console.error('Error removing cart item:', error);
+  return !error;
 }
 
 /**
@@ -505,4 +516,43 @@ export async function fetchAllProducts(): Promise<Product[]> {
   if (!isSupabaseConfigured) return [];
   const { data, error } = await supabase.from('products').select('*').order('is_promoted', { ascending: false }).order('created_at', { ascending: false });
   return error || !data ? [] : (data as Product[]);
+}
+
+/** Orders a member has placed, newest first. */
+export async function fetchPurchases(userId: string): Promise<{ id: string; product_id: string; price_paid: number; purchased_at: string }[]> {
+  if (!isSupabaseConfigured) return [];
+  const { data, error } = await supabase.from('purchases').select('id, product_id, price_paid, purchased_at').eq('user_id', userId).order('purchased_at', { ascending: false });
+  if (error) console.error('Error loading purchases:', error);
+  return error || !data ? [] : data;
+}
+
+/** Saves a placed order (one row per product). Returns false if the save failed. */
+export async function recordPurchases(userId: string, items: { productId: string; pricePaid: number }[]): Promise<boolean> {
+  if (!isSupabaseConfigured || items.length === 0) return false;
+  const { error } = await supabase
+    .from('purchases')
+    .insert(items.map((i) => ({ user_id: userId, product_id: i.productId, price_paid: i.pricePaid, obols_earned: 0, is_public: true })));
+  if (error) console.error('Error saving purchases:', error);
+  return !error;
+}
+
+export interface ReviewRow {
+  id: string;
+  user_id: string;
+  product_id: string;
+  rating: number;
+  comment: string;
+  created_at: string;
+  user: { username: string } | null;
+}
+
+/** Every review, newest first, with the reviewer's @username. */
+export async function fetchAllReviews(): Promise<ReviewRow[]> {
+  if (!isSupabaseConfigured) return [];
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('id, user_id, product_id, rating, comment, created_at, user:profiles(username)')
+    .order('created_at', { ascending: false });
+  if (error) console.error('Error loading reviews:', error);
+  return error || !data ? [] : (data as unknown as ReviewRow[]);
 }

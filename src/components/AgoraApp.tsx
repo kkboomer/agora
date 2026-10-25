@@ -16,13 +16,15 @@ import SearchScreen, { type StyleFilter } from '@/components/screens/SearchScree
 import type { FeedTab, SwipeIntent } from '@/components/screens/DiscoverScreen';
 import type { Friend } from '@/lib/friends';
 import DevNav, { type DevScreen } from '@/components/ui/DevNav';
+import { discountAmount, findDiscount } from '@/lib/discounts';
+import type { Purchase } from '@/lib/purchases';
 import { DISCOVER_ITEMS, addDbProducts, findProduct } from '@/lib/discoverFeed';
 import type { Variant } from '@/components/ui/ProductSheet';
-import { REVIEWS, type Review } from '@/lib/reviews';
+import { timeAgo, type Review } from '@/lib/reviews';
 import { INITIAL_COLLECTIONS, LIKED_ID, type Collection } from '@/lib/collections';
 import { AVATAR_COLORS, cartItemIdFor, sortLikedFirst, toUiCollection, toUiFriend } from '@/lib/accountMapping';
 import { currentUser, signIn, signOut, signUp, type AuthUser } from '@/lib/supabase/auth';
-import { fetchAllProducts, updateDarkMode, updateDisplayName, addFriendship, removeFriendship, searchProfiles, fetchAvatar, fetchCartItems, fetchCollections, fetchFriendsWithCollections, recordSwipe, removeAvatar, removeFromCart, toggleLikedItem, uploadAvatar } from '@/lib/supabase/api';
+import { fetchAllReviews, fetchPurchases, recordPurchases, submitReview, fetchAllProducts, updateDarkMode, updateDisplayName, addFriendship, removeFriendship, searchProfiles, fetchAvatar, fetchCartItems, fetchCollections, fetchFriendsWithCollections, recordSwipe, removeAvatar, removeCartLine, saveCartLine, removeFromCart, toggleLikedItem, uploadAvatar } from '@/lib/supabase/api';
 import { DEMO_USER_ID, isSupabaseConfigured } from '@/lib/supabase/client';
 
 /** Screens that sit outside the bottom-nav tabs. */
@@ -165,7 +167,9 @@ export default function AgoraApp() {
       .then(([cartRows, accountCollections, accountFriends]) => {
         const cartEntries = cartRows.flatMap((row) => {
           const id = cartItemIdFor(row.product_id);
-          return id ? [{ key: `${id}||`, id, qty: 1 }] : [];
+          const color = row.color ?? '';
+          const size = row.size ?? '';
+          return id ? [{ key: [id, color, size].join('|'), id, qty: row.quantity ?? 1, color: color || undefined, size: size || undefined }] : [];
         });
         if (cartEntries.length) setCart(cartEntries);
 
@@ -199,6 +203,47 @@ export default function AgoraApp() {
     document.documentElement.dataset.theme = darkMode ? 'dark' : 'light';
   }, [darkMode]);
 
+  // Orders and reviews come from the database once a member is in (and the product list has loaded, to match them to items).
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [otherReviews, setOtherReviews] = useState<Review[]>([]);
+  useEffect(() => {
+    if (!isSupabaseConfigured || deckVersion === 0) return;
+    const toItemId = (productId: string) => cartItemIdFor(productId);
+    fetchAllReviews().then((rows) => {
+      const mine: Record<string, Review> = {};
+      const others: Review[] = [];
+      for (const row of rows) {
+        const itemId = toItemId(row.product_id);
+        if (!itemId) continue;
+        const username = row.user?.username ?? 'someone';
+        const isMine = session === 'member' && row.user_id === userId;
+        const review: Review = {
+          id: row.id,
+          itemId,
+          user: username,
+          color: isMine ? '#24211d' : AVATAR_COLORS[username.length % AVATAR_COLORS.length],
+          rating: Math.min(5, Math.max(1, row.rating)) as Review['rating'],
+          text: row.comment,
+          when: timeAgo(row.created_at),
+          likes: 0,
+        };
+        if (isMine) mine[itemId] = review;
+        else others.push(review);
+      }
+      setOtherReviews(others);
+      if (session === 'member') setMyReviews(mine);
+    });
+    if (session !== 'member') return;
+    fetchPurchases(userId).then((rows) =>
+      setPurchases(
+        rows.flatMap((row) => {
+          const itemId = toItemId(row.product_id);
+          return itemId ? [{ id: row.id, itemId, purchasedOn: new Date(row.purchased_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), pricePaid: Number(row.price_paid) }] : [];
+        }),
+      ),
+    );
+  }, [session, userId, deckVersion]);
+
   const cartCount = cart.reduce((n, e) => n + e.qty, 0);
   const cartLines = cart.flatMap((e) => {
     const item = findProduct(e.id);
@@ -208,6 +253,8 @@ export default function AgoraApp() {
   // The same product in the same colour and size stacks; a different size is its own line.
   const addToCart = (id: string, variant?: Variant) => {
     const key = [id, variant?.color ?? '', variant?.size ?? ''].join('|');
+    const productId = findProduct(id)?.productId;
+    if (productId && signedIn) saveCartLine(userId, productId, variant?.color ?? '', variant?.size ?? '', (cart.find((e) => e.key === key)?.qty ?? 0) + 1);
     setCart((c) =>
       c.some((e) => e.key === key)
         ? c.map((e) => (e.key === key ? { ...e, qty: e.qty + 1 } : e))
@@ -216,15 +263,50 @@ export default function AgoraApp() {
   };
   const changeQty = async (key: string, delta: 1 | -1) => {
     const entry = cart.find((e) => e.key === key);
-    // Removing the last line for a product also removes it from the saved cart.
-    if (entry && delta === -1 && entry.qty <= 1 && !cart.some((e) => e.id === entry.id && e.key !== key)) {
-      const productId = findProduct(entry.id)?.productId;
-      if (productId && signedIn) await removeFromCart(productId, userId);
+    const productId = entry && findProduct(entry.id)?.productId;
+    if (entry && productId && signedIn) {
+      if (entry.qty + delta <= 0) await removeCartLine(userId, productId, entry.color ?? '', entry.size ?? '');
+      else await saveCartLine(userId, productId, entry.color ?? '', entry.size ?? '', entry.qty + delta);
     }
     setCart((c) => c.flatMap((e) => (e.key !== key ? [e] : e.qty + delta <= 0 ? [] : [{ ...e, qty: e.qty + delta }])));
   };
 
-  const saveReview = (itemId: string, rating: number, text: string) =>
+  // Fake checkout. Only an order that comes to $0 (the ALLFREE code) goes through; nothing is charged.
+  const checkout = (): string | null => {
+    if (!signedIn) return 'Log in to check out.';
+    if (cartLines.length === 0) return 'Your cart is empty.';
+    const subtotal = cartLines.reduce((n, l) => n + l.qty * l.item.price, 0);
+    const total = subtotal - discountAmount(findDiscount(discountCode ?? ''), subtotal);
+    if (total > 0) return 'Payments aren’t set up yet. Use code ALLFREE to try checkout.';
+
+    const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const fresh = cartLines
+      .filter((l, i, all) => all.findIndex((x) => x.item.id === l.item.id) === i && !purchases.some((p) => p.itemId === l.item.id))
+      .map((l) => ({ id: `p-${Date.now()}-${l.item.id}`, itemId: l.item.id, purchasedOn: today, pricePaid: 0 }));
+    const next = [...fresh, ...purchases];
+    setPurchases(next);
+    const rows = fresh.flatMap((p) => {
+      const productId = findProduct(p.itemId)?.productId;
+      return productId ? [{ productId, pricePaid: p.pricePaid }] : [];
+    });
+    recordPurchases(userId, rows);
+    cartLines.forEach((l) => {
+      if (l.item.productId) removeFromCart(l.item.productId, userId);
+    });
+    setCart([]);
+    setDiscountCode(null);
+    return null;
+  };
+
+  const saveReview = (itemId: string, rating: number, text: string) => {
+    if (myReviews[itemId]) return;
+    const productId = findProduct(itemId)?.productId;
+    if (productId && signedIn) {
+      submitReview(productId, rating, text, userId).then((saved) => {
+        // If the save fails, take the review back so it isn't shown as posted when it isn't.
+        if (!saved) setMyReviews((m) => Object.fromEntries(Object.entries(m).filter(([id]) => id !== itemId)));
+      });
+    }
     setMyReviews((m) => (m[itemId] ? m : {
       ...m,
       [itemId]: {
@@ -238,8 +320,9 @@ export default function AgoraApp() {
         likes: 0,
       },
     }));
+  };
   // Your own reviews show first, ahead of everyone else's.
-  const allReviews = [...Object.values(myReviews), ...REVIEWS];
+  const allReviews = [...Object.values(myReviews), ...otherReviews];
 
   // Only "Liked items" is saved to Supabase so far. Other collections change locally.
   const toggleInCollection = async (collectionId: string, itemId: string) => {
@@ -392,7 +475,7 @@ export default function AgoraApp() {
       }
     }
     if (overlay === 'cart') {
-      return <CartScreen nav={nav} onNav={goTo} onBack={() => goTo(nav)} lines={cartLines} onChangeQty={changeQty} appliedCode={discountCode} onApplyCode={setDiscountCode} />;
+      return <CartScreen nav={nav} onNav={goTo} onBack={() => goTo(nav)} lines={cartLines} onChangeQty={changeQty} appliedCode={discountCode} onApplyCode={setDiscountCode} onCheckout={checkout} />;
     }
     if (overlay === 'settings') {
       return (
@@ -467,6 +550,7 @@ export default function AgoraApp() {
             onCreateCollection={createEmptyCollection}
             myReviews={myReviews}
             onSaveReview={saveReview}
+            purchases={purchases}
             name={userName}
             photo={userPhoto}
             onOpenSettings={() => setOverlay('settings')}
@@ -531,6 +615,7 @@ export default function AgoraApp() {
             onChangeQty={changeQty}
             appliedCode={discountCode}
             onApplyCode={setDiscountCode}
+            onCheckout={checkout}
             reviews={allReviews}
           />
         );

@@ -34,3 +34,15 @@ export const reviewsFor = (itemId: string, source: Review[] = REVIEWS) => source
 
 export const averageRating = (reviews: Review[]) =>
   reviews.length ? reviews.reduce((n, r) => n + r.rating, 0) / reviews.length : 0;
+
+/** "5m", "3h", "2d", "1w", "4mo": how long ago, in the short form reviews show. */
+export function timeAgo(iso: string): string {
+  const mins = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days}d`;
+  if (days < 30) return `${Math.round(days / 7)}w`;
+  return `${Math.round(days / 30)}mo`;
+}

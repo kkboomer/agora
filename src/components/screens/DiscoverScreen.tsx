@@ -176,6 +176,7 @@ interface Props {
   onChangeQty: (key: string, delta: 1 | -1) => void;
   appliedCode: string | null;
   onApplyCode: (code: string | null) => void;
+  onCheckout: () => string | null;
   onSwipe: (intent: SwipeIntent, id: string, variant?: Variant) => void;
   reviews: Review[];
   filter: StyleFilter | null;
@@ -206,6 +207,7 @@ export default function DiscoverScreen({
   onChangeQty,
   appliedCode,
   onApplyCode,
+  onCheckout,
   reviews,
   filter,
   productFilters: filters,
@@ -680,6 +682,7 @@ export default function DiscoverScreen({
           onChangeQty={onChangeQty}
           appliedCode={appliedCode}
           onApplyCode={onApplyCode}
+          onCheckout={onCheckout}
         />
         <ReviewsSheet item={item} reviews={reviews} open={reviewsOpen} onClose={() => setReviewsOpen(false)} />
         <CollectionSheet

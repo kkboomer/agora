@@ -8,6 +8,7 @@ export interface Discount {
 // Mock codes until discounts come from the backend.
 const DISCOUNTS: Discount[] = [
   { code: 'AGORA10', label: '10% off', type: 'percent', value: 10 },
+  { code: 'ALLFREE', label: '100% off', type: 'percent', value: 100 },
   { code: 'WELCOME5', label: '$5 off', type: 'amount', value: 5 },
 ];
 

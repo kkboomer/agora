@@ -14,6 +14,18 @@ export interface CartLine {
   size?: string;
 }
 
+/** Shown in place of the cart once a mock order goes through. */
+export function OrderPlaced({ onDone }: { onDone: () => void }) {
+  return (
+    <div className="saved-empty order-placed" role="status">
+      <span><Icon name="check" size={26} /></span>
+      <h2>Order placed</h2>
+      <p>This was a mock checkout, so nothing was charged. Find your pieces under Purchased in your profile.</p>
+      <button onClick={onDone}>Done</button>
+    </div>
+  );
+}
+
 export const money = (n: number) =>
   `$${n.toLocaleString('en-US', { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 })}`;
 
@@ -25,9 +37,13 @@ interface Props {
   onChangeQty: (key: string, delta: 1 | -1) => void;
   appliedCode: string | null;
   onApplyCode: (code: string | null) => void;
+  /** Mock checkout: resolves to a reason it didn't go through, or null when the order is placed. */
+  onCheckout: () => string | null;
 }
 
-export default function CartScreen({ nav, onNav, onBack, lines, onChangeQty, appliedCode, onApplyCode }: Props) {
+export default function CartScreen({ nav, onNav, onBack, lines, onChangeQty, appliedCode, onApplyCode, onCheckout }: Props) {
+  const [done, setDone] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -48,6 +64,17 @@ export default function CartScreen({ nav, onNav, onBack, lines, onChangeQty, app
     setInput('');
     onApplyCode(found.code);
   };
+
+  if (done) {
+    return (
+      <main className="app-shell">
+        <section className="phone cart-screen" aria-label="Order placed">
+          <OrderPlaced onDone={onBack} />
+          <BottomNav current={null} onChange={onNav} variant="home" />
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="app-shell">
@@ -133,7 +160,18 @@ export default function CartScreen({ nav, onNav, onBack, lines, onChangeQty, app
               </>
             )}
             <div className="cart-total"><span>Total</span><strong>{money(total)}</strong></div>
-            <button type="button" className="checkout-btn">Checkout</button>
+            {checkoutError && <p className="promo-error" role="alert">{checkoutError}</p>}
+            <button
+              type="button"
+              className="checkout-btn"
+              onClick={() => {
+                const reason = onCheckout();
+                setCheckoutError(reason);
+                if (!reason) setDone(true);
+              }}
+            >
+              Checkout
+            </button>
           </div>
         )}
 
