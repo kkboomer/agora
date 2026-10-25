@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 export type IconName =
   | 'sliders' | 'cart' | 'star' | 'bookmark' | 'share' | 'home' | 'shirt' | 'gift'
-  | 'user' | 'x' | 'heart' | 'message' | 'search' | 'arrow' | 'bell' | 'userPlus' | 'back' | 'moon' | 'edit' | 'logout' | 'cog' | 'plus' | 'minus' | 'trash' | 'check' | 'userMinus';
+  | 'user' | 'x' | 'heart' | 'message' | 'search' | 'arrow' | 'bell' | 'userPlus' | 'back' | 'moon' | 'edit' | 'logout' | 'cog' | 'plus' | 'minus' | 'trash' | 'check' | 'userMinus' | 'undo';
 
 const paths: Record<IconName, ReactNode> = {
   sliders: <><path d="M4 7h10M18 7h2M4 17h2M10 17h10" /><circle cx="16" cy="7" r="2" /><circle cx="8" cy="17" r="2" /></>,
@@ -21,6 +21,7 @@ const paths: Record<IconName, ReactNode> = {
   arrow: <path d="m9 18 6-6-6-6" />,
   bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></>,
   userPlus: <><circle cx="9" cy="8" r="4" /><path d="M2.5 21a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6" /></>,
+  undo: <><path d="M9 14 4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 0 12h-3" /></>,
   back: <path d="m15 18-6-6 6-6" />,
   cog: <><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></>,
   userMinus: <><circle cx="9" cy="8" r="4" /><path d="M2.5 21a6.5 6.5 0 0 1 13 0M16 11h6" /></>,

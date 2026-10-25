@@ -14,12 +14,16 @@ import CartSheet from '@/components/ui/CartSheet';
 import type { CartLine } from '@/components/screens/CartScreen';
 import CollectionSheet from '@/components/ui/CollectionSheet';
 import type { Collection } from '@/lib/collections';
+import type { Friend } from '@/lib/friends';
 import { reviewsFor, type Review } from '@/lib/reviews';
 import { DISCOVER_ITEMS, type DiscoverItem } from '@/lib/discoverFeed';
 import FilterSheet from '@/components/ui/FilterSheet';
 import { activeFilterCount, matchesFilters, type ProductFilters } from '@/lib/filters';
 
 export type SwipeIntent = 'like' | 'reject' | 'cart';
+
+/** Stands in when the deck is empty: the cards are hidden then, but the rest of the screen reads from an item. */
+const NO_ITEM: DiscoverItem = { id: '', brand: '', title: '', description: '', price: 0, colorOptions: [], sizes: [], image: '', alt: '', focus: 'center' };
 
 const filterLabel = (f: StyleFilter) => (f.query ? `“${f.query}”` : `${f.gender === 'men' ? 'Men’s' : 'Women’s'} ${f.category}`);
 
@@ -58,12 +62,18 @@ interface OptionsState {
   onSize: (size: string) => void;
 }
 
-function CardFace({ item, filter, options }: { item: DiscoverItem; filter: StyleFilter | null; options?: OptionsState }) {
+function CardFace({ item, filter, options, note }: { item: DiscoverItem; filter: StyleFilter | null; options?: OptionsState; note?: string }) {
   const summary = options && (options.size || options.color) ? [options.size, options.color].filter(Boolean).join(' · ') : 'View options';
   return (
     <>
       <img src={item.image} alt={item.alt} draggable={false} style={{ objectPosition: item.focus }} />
       <div className="product-info">
+        {note && (
+          <div className="friend-note">
+            <Icon name="heart" size={12} filled />
+            {note}
+          </div>
+        )}
         <div className="brand-row">
           <span>{item.brand}</span>
           {filter && <span className="more-hint">· more {(filter.query ?? filter.category ?? '').toLowerCase()} as you scroll</span>}
@@ -147,6 +157,11 @@ function CardFace({ item, filter, options }: { item: DiscoverItem; filter: Style
 }
 
 interface Props {
+  friends: Friend[];
+  /** Ids of items already swiped, which don't come back. */
+  seen: string[];
+  onSeen: (id: string) => void;
+  onUnsee: (id: string) => void;
   /** Changes when products are added to the deck, so the feed is rebuilt. */
   deckVersion?: number;
   nav: NavTab;
@@ -173,6 +188,10 @@ interface Props {
 }
 
 export default function DiscoverScreen({
+  friends,
+  seen,
+  onSeen,
+  onUnsee,
   deckVersion = 0,
   nav,
   onNav,
@@ -196,7 +215,8 @@ export default function DiscoverScreen({
   onSignIn,
   onClearFilter,
 }: Props) {
-  const [index, setIndex] = useState(0);
+  // The one item you can step back to. Stepping back clears it, so it only ever goes back once.
+  const [prev, setPrev] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
   const [cartOpen, setCartOpen] = useState(false);
@@ -229,14 +249,43 @@ export default function DiscoverScreen({
   // The card behind grows into place as the front card is pulled away.
   const nextScale = useTransform([x, y], ([lx, ly]: number[]) => 0.94 + 0.06 * Math.min(Math.hypot(lx, ly) / THRESHOLD, 1));
 
-  // The deck is the feed narrowed by the filters sheet (a stand-in for querying the API with them).
+  // What friends liked or saved, per item: "Maya liked this", "Maya added this to City layers".
+  const friendNotes = useMemo(() => {
+    const byItem = new Map<string, { names: string[]; liked: boolean; collection: string }>();
+    for (const f of friends) {
+      const first = f.name.split(' ')[0];
+      for (const c of f.collections) {
+        for (const id of c.itemIds) {
+          const e = byItem.get(id);
+          if (!e) byItem.set(id, { names: [first], liked: c.name === 'Liked items', collection: c.name });
+          else if (!e.names.includes(first)) e.names.push(first);
+        }
+      }
+    }
+    const notes = new Map<string, string>();
+    byItem.forEach((e, id) => {
+      const [a] = e.names;
+      if (e.names.length > 1) notes.set(id, `${a} and ${e.names.length - 1} other${e.names.length > 2 ? 's' : ''} saved this`);
+      else notes.set(id, e.liked ? `${a} liked this` : `${a} added this to ${e.collection}`);
+    });
+    return notes;
+  }, [friends]);
+
+  // The deck is the feed narrowed by the filters sheet (a stand-in for querying the API with them),
+  // minus anything already swiped. The Friends tab only has what friends liked or saved.
+  const friendsTab = feedTab === 'Friends';
   const feed = useMemo(() => {
     // Database products are pushed onto DISCOVER_ITEMS (same array as the catalog), hence deckVersion.
-    const matches = DISCOVER_ITEMS.filter((i) => matchesFilters(i, filters));
-    return matches.length ? matches : [...DISCOVER_ITEMS];
+    const pool = friendsTab ? DISCOVER_ITEMS.filter((i) => friendNotes.has(i.id)) : [...DISCOVER_ITEMS];
+    const matches = pool.filter((i) => matchesFilters(i, filters));
+    return matches.length ? matches : pool;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, deckVersion]);
-  const item = feed[index % feed.length];
+  }, [filters, deckVersion, friendsTab, friendNotes]);
+  const remaining = useMemo(() => feed.filter((i) => !seen.includes(i.id)), [feed, seen]);
+  const empty = remaining.length === 0;
+  // When the deck is empty the cards are hidden, but the rest of the screen still needs an item to read from.
+  const item = remaining[0] ?? feed[0] ?? NO_ITEM;
+  const canGoBack = prev !== null && feed.some((i) => i.id === prev);
 
   // Tapping anywhere outside the options collapses them.
   useEffect(() => {
@@ -256,7 +305,6 @@ export default function DiscoverScreen({
     const q = query.trim();
     if (!q) return;
     closeSearch();
-    setIndex(0);
     onSearch(q);
   };
   useEffect(() => {
@@ -298,7 +346,7 @@ export default function DiscoverScreen({
       // Share sheet dismissed, or clipboard blocked: nothing to do.
     }
   };
-  const nextItem = feed[(index + 1) % feed.length];
+  const nextItem = remaining[1];
   const saved = collections.some((c) => c.itemIds.includes(item.id));
   const reviewCount = reviewsFor(item.id, reviews).length;
 
@@ -316,10 +364,11 @@ export default function DiscoverScreen({
 
   // Warm the cache so the next photo is ready when the fade-in starts.
   useEffect(() => {
-    const upcoming = feed[(index + 2) % feed.length];
+    const upcoming = remaining[2];
+    if (!upcoming) return;
     const img = new Image();
     img.src = upcoming.image;
-  }, [index, feed]);
+  }, [remaining]);
 
   const commit = async (intent: SwipeIntent) => {
     if (busy.current) return;
@@ -343,10 +392,11 @@ export default function DiscoverScreen({
     await Promise.all([animate(x, toX, exit), animate(y, toY, exit), animate(opacity, 0, exit)]);
 
     onSwipe(intent, item.id, intent === 'cart' ? { color: chosenColor, size: chosenSize ?? '' } : undefined);
+    setPrev(item.id);
     // The card behind is already showing the next item, so swap the front card to it
     // and reset in a single paint: no flash, no gap.
     flushSync(() => {
-      setIndex((i) => i + 1);
+      onSeen(item.id);
       setDrag(IDLE);
       setOptsOpen(false);
       setColor(null);
@@ -356,6 +406,16 @@ export default function DiscoverScreen({
     y.set(0);
     opacity.set(1);
     busy.current = false;
+  };
+
+  // Brings back the last item you swiped, once. It doesn't undo a like or a cart add.
+  const goBack = () => {
+    if (!prev || !canGoBack || busy.current) return;
+    onUnsee(prev);
+    setPrev(null);
+    setOptsOpen(false);
+    setColor(null);
+    setSize(null);
   };
 
   const handleDrag = () => setDrag(readIntent(x.get(), y.get()));
@@ -389,10 +449,12 @@ export default function DiscoverScreen({
     <main className="app-shell">
       <section className="phone" aria-label="Fashion discovery">
         <div className="product-photo">
-          <motion.div className="swipe-card back" aria-hidden="true" style={{ scale: nextScale }}>
-            <CardFace item={nextItem} filter={filter} />
-          </motion.div>
-          <motion.div
+          {!empty && nextItem && (
+            <motion.div className="swipe-card back" aria-hidden="true" style={{ scale: nextScale }}>
+              <CardFace item={nextItem} filter={filter} note={friendsTab ? friendNotes.get(nextItem.id) : undefined} />
+            </motion.div>
+          )}
+          {!empty && <motion.div
             className="swipe-card"
             drag
             dragMomentum={false}
@@ -404,6 +466,7 @@ export default function DiscoverScreen({
             <CardFace
               item={item}
               filter={filter}
+              note={friendsTab ? friendNotes.get(item.id) : undefined}
               options={{
                 open: optsOpen,
                 onToggle: () => setOptsOpen((o) => !o),
@@ -413,7 +476,36 @@ export default function DiscoverScreen({
                 onSize: setSize,
               }}
             />
-          </motion.div>
+          </motion.div>}
+          {empty && (
+            <div className="deck-empty" role="status">
+              {friendsTab && friends.length === 0 ? (
+                <>
+                  <h2>Add some friends</h2>
+                  <p>Oh, it’s quiet in here. Add friends and you’ll see what they like and save.</p>
+                  <button className="deck-empty-primary" onClick={() => onNav('gifts')}>Find friends</button>
+                  <button onClick={() => onFeedTab('For You')}>Browse Discover</button>
+                </>
+              ) : friendsTab && feed.length === 0 ? (
+                <>
+                  <h2>Nothing from your friends yet</h2>
+                  <p>When your friends like or save pieces, they’ll show up here.</p>
+                  <button className="deck-empty-primary" onClick={() => onFeedTab('For You')}>Browse Discover</button>
+                </>
+              ) : feed.length === 0 ? (
+                <>
+                  <h2>No products yet</h2>
+                  <p>Pieces will show up here as soon as they’re added.</p>
+                </>
+              ) : (
+                <>
+                  <h2>You’ve seen it all</h2>
+                  <p>No new pieces here right now. Browse by category to find more.</p>
+                  <button className="deck-empty-primary" onClick={() => onNav('closet')}>Discover new items</button>
+                </>
+              )}
+            </div>
+          )}
           <div className="top-shade" />
 
           <header className="top-bar">
@@ -517,7 +609,15 @@ export default function DiscoverScreen({
             </div>
           )}
 
-          <aside className="social-actions">
+          {!empty && (
+            <button aria-label="Previous item" disabled={!canGoBack} onClick={goBack} className="rail-back">
+              <span className="action-circle">
+                <Icon name="undo" />
+              </span>
+            </button>
+          )}
+
+          {!empty && <aside className="social-actions">
             <button aria-label={`See ${reviewCount} reviews`} onClick={() => setReviewsOpen(true)}>
               <span className="action-circle">
                 <Icon name="message" />
@@ -543,10 +643,10 @@ export default function DiscoverScreen({
               </span>
               <small>Share</small>
             </button>
-          </aside>
+          </aside>}
         </div>
 
-        <div className="decision-panel">
+        {!empty && <div className="decision-panel">
           <button className={`decision reject ${reject.active ? 'active' : ''}`} style={reject.style} aria-label="Not for me" onClick={() => commit('reject')}>
             <Icon name="x" size={29} />
           </button>
@@ -556,7 +656,7 @@ export default function DiscoverScreen({
           <button className={`decision like ${like.active ? 'active' : ''}`} style={like.style} aria-label="Like" onClick={() => commit('like')}>
             <Icon name="heart" size={28} filled={like.active} />
           </button>
-        </div>
+        </div>}
 
         <BottomNav current={nav} onChange={onNav} variant="discovery" />
 
@@ -570,10 +670,7 @@ export default function DiscoverScreen({
           open={filtersOpen}
           onClose={() => setFiltersOpen(false)}
           applied={filters}
-          onApply={(f) => {
-            setFilters(f);
-            setIndex(0);
-          }}
+          onApply={setFilters}
           countFor={(f) => DISCOVER_ITEMS.filter((i) => matchesFilters(i, f)).length}
         />
         <CartSheet

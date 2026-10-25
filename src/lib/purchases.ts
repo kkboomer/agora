@@ -7,6 +7,4 @@ export interface Purchase {
 }
 
 // Mock order history until this comes from the Supabase `purchases` table.
-export const PURCHASES: Purchase[] = [
-  { id: 'p1', itemId: 'atelier-signature-coat', purchasedOn: 'Oct 2, 2026', pricePaid: 248 },
-];
+export const PURCHASES: Purchase[] = [];

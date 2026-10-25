@@ -62,6 +62,8 @@ export default function AgoraApp() {
   // Guests browse with local data only: nothing is read from or written to the database.
   const signedIn = session === 'member';
   // False until we've checked for a saved login, so a returning user doesn't see the login screen flash.
+  // The account whose liked items have been merged with this browser's saved copy.
+  const [likedSynced, setLikedSynced] = useState<string | null>(null);
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
 
   // What "logging out" resets to: the mock data, or the account's data once Supabase has loaded it.
@@ -76,6 +78,7 @@ export default function AgoraApp() {
     setCart([]);
     setMyReviews({});
     setUserId(user.id);
+    setLikedSynced(null);
     setUserName(user.name);
     setUserHandle(user.handle);
     setUserPhoto(user.avatarUrl);
@@ -108,14 +111,37 @@ export default function AgoraApp() {
     setSession('guest');
   };
   useEffect(() => {
-    if (session !== 'guest') return;
+    // Members wait until their account has loaded, so an empty list can't overwrite what was saved.
+    if (session === 'member' && likedSynced !== userId) return;
+    if (!session) return;
+    const key = session === 'guest' ? GUEST_LIKED_KEY : `agora.liked.${userId}`;
     const liked = collections.find((c) => c.id === LIKED_ID)?.itemIds ?? [];
     try {
-      localStorage.setItem(GUEST_LIKED_KEY, JSON.stringify(liked));
+      localStorage.setItem(key, JSON.stringify(liked));
     } catch {
       // Storage unavailable: likes just last for this visit.
     }
-  }, [session, collections]);
+  }, [session, collections, userId, likedSynced]);
+
+  // Items already swiped stay out of the deck. Kept per account (or one shared guest list) in this browser.
+  const seenKey = `agora.seen.${session === 'member' ? userId : 'guest'}`;
+  const [seen, setSeen] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(seenKey) ?? '[]');
+      setSeen(Array.isArray(saved) ? saved.filter((id) => typeof id === 'string') : []);
+    } catch {
+      setSeen([]);
+    }
+  }, [seenKey]);
+  const updateSeen = (next: string[]) => {
+    setSeen(next);
+    try {
+      localStorage.setItem(seenKey, JSON.stringify(next));
+    } catch {
+      // Storage unavailable: it just won't survive a reload.
+    }
+  };
 
   // Add every seeded product to the discover deck. The bump tells Discover to re-read it.
   const [deckVersion, setDeckVersion] = useState(0);
@@ -154,7 +180,18 @@ export default function AgoraApp() {
           setFriends(mapped);
         }
       })
-      .catch((error) => console.error('Error loading demo account:', error));
+      .catch((error) => console.error('Error loading demo account:', error))
+      .finally(() => {
+        // Likes the database doesn't have (not every item is a database product, or a save failed) come back from this browser.
+        let local: string[] = [];
+        try {
+          local = JSON.parse(localStorage.getItem(`agora.liked.${userId}`) ?? '[]').filter((id: unknown) => typeof id === 'string' && findProduct(id));
+        } catch {
+          // Storage unavailable or corrupt: nothing to merge.
+        }
+        setCollections((cs) => cs.map((c) => (c.id === LIKED_ID ? { ...c, itemIds: [...c.itemIds, ...local.filter((id) => !c.itemIds.includes(id))] } : c)));
+        setLikedSynced(userId);
+      });
     if (userId === DEMO_USER_ID) fetchAvatar(userId).then((url) => url && setUserPhoto(url));
   }, [session, userId]);
 
@@ -208,7 +245,7 @@ export default function AgoraApp() {
   const toggleInCollection = async (collectionId: string, itemId: string) => {
     if (collectionId === LIKED_ID) {
       const productId = findProduct(itemId)?.productId;
-      if (productId && signedIn && !(await toggleLikedItem(productId, userId))) return;
+      if (productId && signedIn) await toggleLikedItem(productId, userId);
     }
     setCollections((cs) =>
       cs.map((c) =>
@@ -276,7 +313,8 @@ export default function AgoraApp() {
     const productId = findProduct(id)?.productId;
     if (productId && signedIn) {
       const persisted = await recordSwipe(productId, intent === 'reject' ? 'left' : 'right', userId, intent === 'cart');
-      if (!persisted) return;
+      // A failed save shouldn't lose a like: it still lands in Liked items and is kept in this browser.
+      if (!persisted && intent === 'cart') return;
     }
 
     if (intent === 'like') {
@@ -403,6 +441,7 @@ export default function AgoraApp() {
       case 'home':
         return (
           <HomeScreen
+            friends={friends}
             nav={nav}
             onNav={goTo}
             onOpenSearch={() => setOverlay('search')}
@@ -467,6 +506,10 @@ export default function AgoraApp() {
       default:
         return (
           <DiscoverScreen
+            friends={friends}
+            seen={seen}
+            onSeen={(id) => updateSeen(seen.includes(id) ? seen : [...seen, id])}
+            onUnsee={(id) => updateSeen(seen.filter((x) => x !== id))}
             deckVersion={deckVersion}
             guest={!signedIn}
             onSignIn={goToSignIn}

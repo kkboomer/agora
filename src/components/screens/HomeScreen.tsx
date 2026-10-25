@@ -3,7 +3,8 @@ import { useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import BottomNav, { type NavTab } from '@/components/ui/BottomNav';
 import FilterSheet from '@/components/ui/FilterSheet';
-import { DISCOVER_ITEMS } from '@/lib/discoverFeed';
+import { DISCOVER_ITEMS, findProduct } from '@/lib/discoverFeed';
+import type { Friend } from '@/lib/friends';
 import { activeFilterCount, matchesFilters, type ProductFilters } from '@/lib/filters';
 import type { FeedTab } from '@/components/screens/DiscoverScreen';
 
@@ -19,12 +20,24 @@ interface Props {
   onSeeAll: (tab: FeedTab) => void;
   onOpenCart: () => void;
   onOpenProduct: (id: string) => void;
+  friends: Friend[];
 }
 
-export default function HomeScreen({ nav, onNav, onOpenSearch, onSearch, productFilters, onProductFilters, cartCount, onOpenSettings, onSeeAll, onOpenCart, onOpenProduct }: Props) {
+export default function HomeScreen({ nav, onNav, onOpenSearch, onSearch, productFilters, onProductFilters, cartCount, onOpenSettings, onSeeAll, onOpenCart, onOpenProduct, friends }: Props) {
   const [query, setQuery] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filterCount = activeFilterCount(productFilters);
+
+  // Trending is the first of the products in the database; "friends are into" is what real friends liked or saved.
+  const trending = DISCOVER_ITEMS.slice(0, 2);
+  const friendPicks = friends
+    .flatMap((f) => f.collections.flatMap((c) => c.itemIds.map((id) => ({ friend: f, id, liked: c.name === 'Liked items' }))))
+    .flatMap((pick) => {
+      const item = findProduct(pick.id);
+      return item ? [{ ...pick, item }] : [];
+    })
+    .filter((pick, i, all) => all.findIndex((x) => x.id === pick.id) === i)
+    .slice(0, 2);
 
   // Makes a card behave as a button that opens the product page.
   const open = (id: string, title: string) => ({
@@ -72,14 +85,16 @@ export default function HomeScreen({ nav, onNav, onOpenSearch, onSearch, product
               <button onClick={() => onSeeAll('Trending')}>See all <Icon name="arrow" size={14} /></button>
             </div>
             <div className="trend-grid">
-              <article className="trend-card trend-main" {...open('frankie-oversized-tailoring', 'Oversized tailoring')}>
-                <img src="https://images.unsplash.com/photo-1613915617430-8ab0fd7c6baf?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=85&w=700" alt="Neutral tailored blazer and trousers" />
-                <div className="trend-overlay"><span>1</span><div><small>THE FRANKIE SHOP</small><h3>Oversized tailoring</h3><p>$189</p></div></div>
-              </article>
-              <article className="trend-card" {...open('nicholson-volume-jacket', 'Volume Jacket')}>
-                <img src="https://images.unsplash.com/photo-1603189343302-e603f7add05a?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=85&w=500" alt="Black statement jacket" />
-                <div className="mini-copy"><small>STUDIO NICHOLSON</small><h3>Volume Jacket</h3><p>$215</p></div>
-              </article>
+              {trending.map((item, i) => (
+                <article key={item.id} className={`trend-card ${i === 0 ? 'trend-main' : ''}`} {...open(item.id, item.title)}>
+                  <img src={item.image} alt={item.alt} style={{ objectPosition: item.focus }} />
+                  {i === 0 ? (
+                    <div className="trend-overlay"><span>1</span><div><small>{item.brand.toUpperCase()}</small><h3>{item.title}</h3><p>${item.price}</p></div></div>
+                  ) : (
+                    <div className="mini-copy"><small>{item.brand.toUpperCase()}</small><h3>{item.title}</h3><p>${item.price}</p></div>
+                  )}
+                </article>
+              ))}
             </div>
           </section>
 
@@ -89,14 +104,13 @@ export default function HomeScreen({ nav, onNav, onOpenSearch, onSearch, product
               <button onClick={() => onSeeAll('Friends')}>See all <Icon name="arrow" size={14} /></button>
             </div>
             <div className="friend-list">
-              <article className="friend-card" {...open('everyday-trench', 'Everyday Trench')}>
-                <div className="friend-photo"><img src="https://images.unsplash.com/photo-1692180142575-c31fcd106b5b?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=85&w=500" alt="Editorial street style look" /><span className="avatar">M</span></div>
-                <div><p><strong>Maya</strong> saved this</p><h3>Everyday Trench</h3><span>$168</span></div>
-              </article>
-              <article className="friend-card" {...open('sculpted-midi', 'Sculpted Midi')}>
-                <div className="friend-photo"><img src="https://images.unsplash.com/photo-1659522761084-79196b64abe4?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=85&w=500" alt="Minimal white dress" /><span className="avatar alt">A</span></div>
-                <div><p><strong>Alex</strong> bought this</p><h3>Sculpted Midi</h3><span>$142</span></div>
-              </article>
+              {friendPicks.length === 0 && <p className="friend-picks-empty">{friends.length === 0 ? 'Add friends to see what they’re into.' : 'Nothing from your friends yet.'}</p>}
+              {friendPicks.map(({ friend, item, liked }, i) => (
+                <article key={item.id} className="friend-card" {...open(item.id, item.title)}>
+                  <div className="friend-photo"><img src={item.image} alt={item.alt} style={{ objectPosition: item.focus }} /><span className={`avatar ${i % 2 ? 'alt' : ''}`}>{friend.initial}</span></div>
+                  <div><p><strong>{friend.name.split(' ')[0]}</strong> {liked ? 'liked' : 'saved'} this</p><h3>{item.title}</h3><span>${item.price}</span></div>
+                </article>
+              ))}
             </div>
           </section>
         </div>

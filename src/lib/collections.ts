@@ -24,19 +24,9 @@ export interface Collection {
 
 export const LIKED_ID = 'liked';
 
-const COAT = { itemId: 'atelier-signature-coat', ratio: 0.75 };
-const BLAZER = { itemId: 'frankie-oversized-tailoring', ratio: 1 };
-const JACKET = { itemId: 'nicholson-volume-jacket', ratio: 0.8 };
-const TRENCH = { itemId: 'everyday-trench', ratio: 0.66 };
-const MIDI = { itemId: 'sculpted-midi', ratio: 0.9 };
-
-export const ALL_PIECES: Piece[] = [COAT, BLAZER, JACKET, TRENCH, MIDI];
-
-// Mock starting collections until these come from Supabase.
+// Starting collections are empty: pieces come from the products you like and save.
 export const INITIAL_COLLECTIONS: Collection[] = [
-  { id: LIKED_ID, name: 'Liked items', isPrivate: true, itemIds: [], pieces: [COAT, BLAZER, JACKET, TRENCH, MIDI] },
-  { id: 'layers', name: 'Everyday layers', isPrivate: true, itemIds: [], pieces: [TRENCH, JACKET, BLAZER] },
-  { id: 'occasion', name: 'Occasion', isPrivate: true, itemIds: [], pieces: [MIDI, COAT] },
+  { id: LIKED_ID, name: 'Liked items', isPrivate: true, itemIds: [], pieces: [] },
 ];
 
 /** Everything in a collection, in order: starting pieces first, then items saved from Discover. */

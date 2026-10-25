@@ -807,3 +807,24 @@
 .discover-orb { flex: none; width: 40px; height: 40px; min-width: 40px; min-height: 40px; aspect-ratio: 1 / 1; border-radius: 50%; }
 .discover-orb img { flex: none; width: 40px; height: 40px; border-radius: 50%; }
 .auth-logo img { flex: none; width: 84px; height: 84px; aspect-ratio: 1 / 1; border-radius: 50%; object-fit: cover; }
+
+/* Friend note on a card, empty deck, back button */
+.friend-note { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 8px; padding: 5px 11px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: 12px; font-weight: 600; }
+.deck-empty { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 0 36px 90px; text-align: center; background: #1d1b18; color: #efebe3; }
+.deck-empty h2 { margin: 0; font-size: 24px; }
+.deck-empty p { margin: 0 0 8px; max-width: 280px; font-size: 14px; line-height: 1.45; opacity: .75; }
+.deck-empty button { min-width: 180px; padding: 12px 22px; border: 1px solid rgba(255,255,255,.28); border-radius: 999px; color: inherit; font-weight: 600; }
+.deck-empty button.deck-empty-primary { border-color: transparent; background: var(--accent); color: var(--on-accent); }
+.social-actions .rail-back:disabled { opacity: .4; cursor: default; }
+
+/* Back button sits right under the search icon, not in the lower rail */
+.rail-back { position: absolute; z-index: 2; right: 14px; top: max(108px, calc(env(safe-area-inset-top) + 66px)); display: flex; flex-direction: column; align-items: center; gap: 4px; color: white; filter: drop-shadow(0 2px 6px rgba(0,0,0,.25)); }
+.rail-back small { font-size: 9.5px; font-weight: 600; }
+.rail-back:disabled { opacity: .4; cursor: default; }
+
+/* Every product sits on tan, which moves with the card, so transparent PNGs never show the next item through them */
+.swipe-card { background: #efe9df; }
+.swipe-card > img { background: #efe9df; }
+.product-hero { background: #efe9df; }
+
+.friend-picks-empty { margin: 0; padding: 18px 4px; color: #77726a; font-size: 14px; }
