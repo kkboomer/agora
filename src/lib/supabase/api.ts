@@ -498,3 +498,10 @@ export async function updateDarkMode(userId: string, dark: boolean): Promise<boo
   const { error } = await supabase.from('profiles').update({ dark_mode: dark }).eq('id', userId);
   return !error;
 }
+
+/** Every product in the database, for the discover deck. Products are public, so guests can read them too. */
+export async function fetchAllProducts(): Promise<Product[]> {
+  if (!isSupabaseConfigured) return [];
+  const { data, error } = await supabase.from('products').select('*').order('is_promoted', { ascending: false }).order('created_at', { ascending: false });
+  return error || !data ? [] : (data as Product[]);
+}

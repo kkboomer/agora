@@ -16,13 +16,13 @@ import SearchScreen, { type StyleFilter } from '@/components/screens/SearchScree
 import type { FeedTab, SwipeIntent } from '@/components/screens/DiscoverScreen';
 import type { Friend } from '@/lib/friends';
 import DevNav, { type DevScreen } from '@/components/ui/DevNav';
-import { DISCOVER_ITEMS, findProduct } from '@/lib/discoverFeed';
+import { DISCOVER_ITEMS, addDbProducts, findProduct } from '@/lib/discoverFeed';
 import type { Variant } from '@/components/ui/ProductSheet';
 import { REVIEWS, type Review } from '@/lib/reviews';
 import { INITIAL_COLLECTIONS, LIKED_ID, type Collection } from '@/lib/collections';
 import { AVATAR_COLORS, cartItemIdFor, sortLikedFirst, toUiCollection, toUiFriend } from '@/lib/accountMapping';
 import { currentUser, signIn, signOut, signUp, type AuthUser } from '@/lib/supabase/auth';
-import { updateDarkMode, updateDisplayName, addFriendship, removeFriendship, searchProfiles, fetchAvatar, fetchCartItems, fetchCollections, fetchFriendsWithCollections, recordSwipe, removeAvatar, removeFromCart, toggleLikedItem, uploadAvatar } from '@/lib/supabase/api';
+import { fetchAllProducts, updateDarkMode, updateDisplayName, addFriendship, removeFriendship, searchProfiles, fetchAvatar, fetchCartItems, fetchCollections, fetchFriendsWithCollections, recordSwipe, removeAvatar, removeFromCart, toggleLikedItem, uploadAvatar } from '@/lib/supabase/api';
 import { DEMO_USER_ID, isSupabaseConfigured } from '@/lib/supabase/client';
 
 /** Screens that sit outside the bottom-nav tabs. */
@@ -116,6 +116,13 @@ export default function AgoraApp() {
       // Storage unavailable: likes just last for this visit.
     }
   }, [session, collections]);
+
+  // Add every seeded product to the discover deck. The bump tells Discover to re-read it.
+  const [deckVersion, setDeckVersion] = useState(0);
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    fetchAllProducts().then((rows) => addDbProducts(rows) && setDeckVersion((v) => v + 1));
+  }, []);
 
   // Pick up a saved login on first load.
   useEffect(() => {
@@ -460,6 +467,7 @@ export default function AgoraApp() {
       default:
         return (
           <DiscoverScreen
+            deckVersion={deckVersion}
             guest={!signedIn}
             onSignIn={goToSignIn}
             nav={nav}

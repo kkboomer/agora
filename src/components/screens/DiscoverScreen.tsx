@@ -147,6 +147,8 @@ function CardFace({ item, filter, options }: { item: DiscoverItem; filter: Style
 }
 
 interface Props {
+  /** Changes when products are added to the deck, so the feed is rebuilt. */
+  deckVersion?: number;
   nav: NavTab;
   onNav: (tab: NavTab) => void;
   feedTab: FeedTab;
@@ -171,6 +173,7 @@ interface Props {
 }
 
 export default function DiscoverScreen({
+  deckVersion = 0,
   nav,
   onNav,
   feedTab,
@@ -228,9 +231,11 @@ export default function DiscoverScreen({
 
   // The deck is the feed narrowed by the filters sheet (a stand-in for querying the API with them).
   const feed = useMemo(() => {
+    // Database products are pushed onto DISCOVER_ITEMS (same array as the catalog), hence deckVersion.
     const matches = DISCOVER_ITEMS.filter((i) => matchesFilters(i, filters));
-    return matches.length ? matches : DISCOVER_ITEMS;
-  }, [filters]);
+    return matches.length ? matches : [...DISCOVER_ITEMS];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters, deckVersion]);
   const item = feed[index % feed.length];
 
   // Tapping anywhere outside the options collapses them.
