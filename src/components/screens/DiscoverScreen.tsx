@@ -6,6 +6,7 @@ import { flushSync } from 'react-dom';
 import { AnimatePresence, animate, motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import Icon from '@/components/ui/Icon';
 import AIRecommendationBadge from '@/components/deck/AIRecommendationBadge';
+import FriendMatchBadge from '@/components/deck/FriendMatchBadge';
 import BottomNav, { type NavTab } from '@/components/ui/BottomNav';
 import type { StyleFilter } from '@/components/screens/SearchScreen';
 import ReviewsSheet from '@/components/ui/ReviewsSheet';
@@ -18,6 +19,7 @@ import type { Collection } from '@/lib/collections';
 import type { Friend } from '@/lib/friends';
 import { reviewsFor, type Review } from '@/lib/reviews';
 import { DISCOVER_ITEMS, type DiscoverItem } from '@/lib/discoverFeed';
+import type { FriendActivity } from '@/lib/friendMatch';
 import type { GiftProps } from '@/components/ui/GiftObolsSheet';
 import FilterSheet from '@/components/ui/FilterSheet';
 import { activeFilterCount, matchesFilters, type ProductFilters } from '@/lib/filters';
@@ -70,12 +72,14 @@ function CardFace({
   options,
   note,
   showAiBadge = false,
+  friendActivities,
 }: {
   item: DiscoverItem;
   filter: StyleFilter | null;
   options?: OptionsState;
   note?: string;
   showAiBadge?: boolean;
+  friendActivities?: FriendActivity[];
 }) {
   // Nothing to choose (one size, at most one colour): just say so, and there's nothing to expand.
   const fixed = item.sizes.length <= 1 && item.colorOptions.length <= 1;
@@ -91,6 +95,7 @@ function CardFace({
           </div>
         )}
         {showAiBadge && item.aiMatchScore !== undefined && <AIRecommendationBadge item={item} />}
+        {friendActivities && <FriendMatchBadge item={item} friendActivities={friendActivities} />}
         <div className="brand-row">
           <span>{item.brand}</span>
           {filter && <span className="more-hint">· more {(filter.query ?? filter.category ?? '').toLowerCase()} as you scroll</span>}
@@ -298,6 +303,27 @@ export default function DiscoverScreen({
     });
     return notes;
   }, [friends]);
+  const friendActivitiesByItem = new Map<string, FriendActivity[]>();
+  for (const friend of friends) {
+    const friendName = friend.name.split(' ')[0];
+    for (const collection of friend.collections) {
+      for (const itemId of collection.itemIds) {
+        const item = DISCOVER_ITEMS.find((product) => product.id === itemId);
+        if (!item) continue;
+        const itemActivities = friendActivitiesByItem.get(itemId) ?? [];
+        if (!itemActivities.some((activity) => activity.friendName === friendName)) {
+          itemActivities.push({
+            friendName,
+            itemTitle: item.title,
+            category: item.category ?? '',
+            brand: item.brand,
+            itemId,
+          });
+          friendActivitiesByItem.set(itemId, itemActivities);
+        }
+      }
+    }
+  }
 
   // The deck is the feed narrowed by the filters sheet (a stand-in for querying the API with them),
   // minus anything already swiped. The Friends tab only has what friends liked or saved.
@@ -489,7 +515,12 @@ export default function DiscoverScreen({
         <div className="product-photo">
           {!empty && nextItem && (
             <motion.div className="swipe-card back" aria-hidden="true" style={{ scale: nextScale }}>
-              <CardFace item={nextItem} filter={filter} note={friendsTab ? friendNotes.get(nextItem.id) : undefined} />
+              <CardFace
+                item={nextItem}
+                filter={filter}
+                note={friendsTab ? friendNotes.get(nextItem.id) : undefined}
+                friendActivities={friendsTab ? friendActivitiesByItem.get(nextItem.id) : undefined}
+              />
             </motion.div>
           )}
           {!empty && <motion.div
@@ -506,6 +537,7 @@ export default function DiscoverScreen({
               filter={filter}
               note={friendsTab ? friendNotes.get(item.id) : undefined}
               showAiBadge={showAiBadge}
+              friendActivities={friendsTab ? friendActivitiesByItem.get(item.id) : undefined}
               options={{
                 open: optsOpen,
                 onToggle: () => setOptsOpen((o) => !o),
