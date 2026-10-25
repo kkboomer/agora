@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { AnimatePresence, animate, motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import Icon from '@/components/ui/Icon';
+import AIRecommendationBadge from '@/components/deck/AIRecommendationBadge';
 import BottomNav, { type NavTab } from '@/components/ui/BottomNav';
 import type { StyleFilter } from '@/components/screens/SearchScreen';
 import ReviewsSheet from '@/components/ui/ReviewsSheet';
@@ -63,7 +64,19 @@ interface OptionsState {
   onSize: (size: string) => void;
 }
 
-function CardFace({ item, filter, options, note }: { item: DiscoverItem; filter: StyleFilter | null; options?: OptionsState; note?: string }) {
+function CardFace({
+  item,
+  filter,
+  options,
+  note,
+  showAiBadge = false,
+}: {
+  item: DiscoverItem;
+  filter: StyleFilter | null;
+  options?: OptionsState;
+  note?: string;
+  showAiBadge?: boolean;
+}) {
   // Nothing to choose (one size, at most one colour): just say so, and there's nothing to expand.
   const fixed = item.sizes.length <= 1 && item.colorOptions.length <= 1;
   const summary = options && (options.size || options.color) ? [options.size, options.color].filter(Boolean).join(' · ') : 'View options';
@@ -77,6 +90,7 @@ function CardFace({ item, filter, options, note }: { item: DiscoverItem; filter:
             {note}
           </div>
         )}
+        {showAiBadge && item.aiMatchScore !== undefined && <AIRecommendationBadge item={item} />}
         <div className="brand-row">
           <span>{item.brand}</span>
           {filter && <span className="more-hint">· more {(filter.query ?? filter.category ?? '').toLowerCase()} as you scroll</span>}
@@ -237,6 +251,10 @@ export default function DiscoverScreen({
   const searchRef = useRef<HTMLInputElement>(null);
   const filterCount = activeFilterCount(filters);
   const [optsOpen, setOptsOpen] = useState(false);
+  const [recommendationCadence, setRecommendationCadence] = useState<{
+    feedKey: string;
+    encountered: number;
+  }>({ feedKey: '', encountered: 0 });
   const [color, setColor] = useState<string | null>(null);
   const [size, setSize] = useState<string | null>(null);
   const [drag, setDrag] = useState<DragState>(IDLE);
@@ -284,6 +302,7 @@ export default function DiscoverScreen({
   // The deck is the feed narrowed by the filters sheet (a stand-in for querying the API with them),
   // minus anything already swiped. The Friends tab only has what friends liked or saved.
   const friendsTab = feedTab === 'Friends';
+  const feedViewKey = JSON.stringify([feedTab, filter, filters]);
   const feed = useMemo(() => {
     // Database products are pushed onto DISCOVER_ITEMS (same array as the catalog), hence deckVersion.
     const pool = friendsTab ? DISCOVER_ITEMS.filter((i) => friendNotes.has(i.id)) : [...DISCOVER_ITEMS];
@@ -295,6 +314,9 @@ export default function DiscoverScreen({
   const empty = remaining.length === 0;
   // When the deck is empty the cards are hidden, but the rest of the screen still needs an item to read from.
   const item = remaining[0] ?? feed[0] ?? NO_ITEM;
+  const encounteredInFeed =
+    recommendationCadence.feedKey === feedViewKey ? recommendationCadence.encountered : 0;
+  const showAiBadge = encounteredInFeed % 5 === 0 && item.aiMatchScore !== undefined;
   const canGoBack = prev !== null && feed.some((i) => i.id === prev);
 
   // Tapping anywhere outside the options collapses them.
@@ -408,6 +430,11 @@ export default function DiscoverScreen({
     // and reset in a single paint: no flash, no gap.
     flushSync(() => {
       onSeen(item.id);
+      setRecommendationCadence((current) => ({
+        feedKey: feedViewKey,
+        encountered:
+          (current.feedKey === feedViewKey ? current.encountered : 0) + 1,
+      }));
       setDrag(IDLE);
       setOptsOpen(false);
       setColor(null);
@@ -478,6 +505,7 @@ export default function DiscoverScreen({
               item={item}
               filter={filter}
               note={friendsTab ? friendNotes.get(item.id) : undefined}
+              showAiBadge={showAiBadge}
               options={{
                 open: optsOpen,
                 onToggle: () => setOptsOpen((o) => !o),

@@ -20,7 +20,7 @@ import DevNav, { type DevScreen } from '@/components/ui/DevNav';
 import { discountAmount, findDiscount, isRewardCode, setUnlockedCodes } from '@/lib/discounts';
 import { REWARDS, type GiftEntry } from '@/lib/rewards';
 import type { Purchase } from '@/lib/purchases';
-import { DISCOVER_ITEMS, addDbProducts, findProduct } from '@/lib/discoverFeed';
+import { DISCOVER_ITEMS, adaptFeedOnRightSwipe, addDbProducts, findProduct } from '@/lib/discoverFeed';
 import type { Variant } from '@/components/ui/ProductSheet';
 import { timeAgo, type Review } from '@/lib/reviews';
 import { INITIAL_COLLECTIONS, LIKED_ID, type Collection } from '@/lib/collections';
@@ -491,6 +491,13 @@ export default function AgoraApp() {
       if (alreadyLiked) return;
       if (productId && signedIn && !(await toggleLikedItem(productId, userId))) return;
       setCollections((cs) => cs.map((c) => (c.id === LIKED_ID && !c.itemIds.includes(id) ? { ...c, itemIds: [...c.itemIds, id] } : c)));
+    }
+    if (intent === 'like' || intent === 'cart') {
+      const likedItem = findProduct(id);
+      if (likedItem) {
+        adaptFeedOnRightSwipe(likedItem);
+        setDeckVersion((version) => version + 1);
+      }
     }
     if (intent === 'cart') addToCart(id, variant);
   };
