@@ -194,7 +194,8 @@ export async function fetchFriendsWithCollections(
       .from('collections')
       .select('*, items:collection_items(*, product:products(*))')
       .in('user_id', friendIds)
-      .eq('is_public', true)
+      // Likes are shared with friends (that's what the Friends feed shows); other private collections stay hidden.
+      .or('is_public.eq.true,name.eq.Liked items')
       .order('created_at', { ascending: true }),
   ]);
 
