@@ -828,3 +828,4 @@
 .product-hero { background: #efe9df; }
 
 .friend-picks-empty { margin: 0; padding: 18px 4px; color: #77726a; font-size: 14px; }
+.options-fixed { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; background: rgba(255,255,255,.18); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: white; font: 600 12px 'Manrope', sans-serif; }

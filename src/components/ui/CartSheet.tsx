@@ -76,7 +76,7 @@ export default function CartSheet({ open, onClose, lines, onChangeQty, appliedCo
                 <div className="cart-info">
                   <small>{item.brand}</small>
                   <h2>{item.title}</h2>
-                  <p>{color || size ? [color, size && `Size ${size}`].filter(Boolean).join(' · ') : item.description}</p>
+                  <p>{color || size ? [color, size && (size === 'One size' ? size : `Size ${size}`)].filter(Boolean).join(' · ') : item.description}</p>
                   <div className="cart-bottom">
                     <strong>{money(item.price)}</strong>
                     <div className="qty" role="group" aria-label={`Quantity for ${item.title}`}>

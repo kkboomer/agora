@@ -23,8 +23,8 @@ interface Props {
 /** Full-screen product page: big photo, then colour and size options and Add to cart. */
 export default function ProductScreen({ nav, onNav, onBack, item, cartCount, onOpenCart, liked, onToggleLike, onAddToCart }: Props) {
   const [color, setColor] = useState(item.colorOptions[0]?.name ?? '');
-  const [size, setSize] = useState<string | null>(item.sizes.length === 1 ? item.sizes[0] : null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [size, setSize] = useState<string | null>(item.sizes.length > 1 ? null : (item.sizes[0] ?? 'One size'));
+  const [toast, setToast] = useState<string | null>(item.sizes.length > 1 ? null : (item.sizes[0] ?? 'One size'));
   const timer = useRef<number | undefined>(undefined);
 
   const add = () => {
@@ -69,11 +69,13 @@ export default function ProductScreen({ nav, onNav, onBack, item, cartCount, onO
 
             <section aria-label="Size">
               <div className="opt-label"><span>Size</span><strong>{size ?? 'Select a size'}</strong></div>
-              <div className="sizes" role="radiogroup" aria-label="Size">
-                {item.sizes.map((s) => (
-                  <button key={s} role="radio" aria-checked={size === s} className={`size-chip ${size === s ? 'on' : ''}`} onClick={() => setSize(s)}>{s}</button>
-                ))}
-              </div>
+              {item.sizes.length > 1 && (
+                <div className="sizes" role="radiogroup" aria-label="Size">
+                  {item.sizes.map((s) => (
+                    <button key={s} role="radio" aria-checked={size === s} className={`size-chip ${size === s ? 'on' : ''}`} onClick={() => setSize(s)}>{s}</button>
+                  ))}
+                </div>
+              )}
             </section>
           </div>
         </div>

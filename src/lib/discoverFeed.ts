@@ -30,6 +30,7 @@ export const DISCOVER_ITEMS: DiscoverItem[] = [];
 
 /** Every product the app knows about. */
 export const CATALOG: DiscoverItem[] = DISCOVER_ITEMS;
+
 export const findProduct = (id: string) => CATALOG.find((i) => i.id === id);
 
 /** The slice of a database product the feed needs. */

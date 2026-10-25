@@ -15,6 +15,9 @@ import {
   FriendWithCollections,
 } from '../../types/types';
 
+/** Supabase errors print as {} in the console; spell out the useful parts. */
+const why = (e: { message?: string; code?: string; details?: string; hint?: string }) => [e.code, e.message, e.details, e.hint].filter(Boolean).join(' | ');
+
 // =========================================================
 // PERSON 1 HELPERS: SWIPE DECK & CART
 // =========================================================
@@ -102,7 +105,7 @@ export async function saveCartLine(userId: string, productId: string, color: str
   const { error } = await supabase
     .from('cart_items')
     .upsert({ user_id: userId, product_id: productId, color, size, quantity }, { onConflict: 'user_id,product_id,color,size' });
-  if (error) console.error('Error saving cart item:', error);
+  if (error) console.error('Error saving cart item:', why(error));
   return !error;
 }
 
@@ -110,7 +113,7 @@ export async function saveCartLine(userId: string, productId: string, color: str
 export async function removeCartLine(userId: string, productId: string, color: string, size: string): Promise<boolean> {
   if (!isSupabaseConfigured) return false;
   const { error } = await supabase.from('cart_items').delete().eq('user_id', userId).eq('product_id', productId).eq('color', color).eq('size', size);
-  if (error) console.error('Error removing cart item:', error);
+  if (error) console.error('Error removing cart item:', why(error));
   return !error;
 }
 
@@ -392,7 +395,7 @@ export async function submitReview(
     .single();
 
   if (error) {
-    console.error('Error submitting review:', error);
+    console.error('Error submitting review:', why(error));
     return null;
   }
   return data as Review;
@@ -522,7 +525,7 @@ export async function fetchAllProducts(): Promise<Product[]> {
 export async function fetchPurchases(userId: string): Promise<{ id: string; product_id: string; price_paid: number; purchased_at: string }[]> {
   if (!isSupabaseConfigured) return [];
   const { data, error } = await supabase.from('purchases').select('id, product_id, price_paid, purchased_at').eq('user_id', userId).order('purchased_at', { ascending: false });
-  if (error) console.error('Error loading purchases:', error);
+  if (error) console.error('Error loading purchases:', why(error));
   return error || !data ? [] : data;
 }
 
@@ -532,7 +535,7 @@ export async function recordPurchases(userId: string, items: { productId: string
   const { error } = await supabase
     .from('purchases')
     .insert(items.map((i) => ({ user_id: userId, product_id: i.productId, price_paid: i.pricePaid, obols_earned: 0, is_public: true })));
-  if (error) console.error('Error saving purchases:', error);
+  if (error) console.error('Error saving purchases:', why(error));
   return !error;
 }
 
@@ -553,6 +556,6 @@ export async function fetchAllReviews(): Promise<ReviewRow[]> {
     .from('reviews')
     .select('id, user_id, product_id, rating, comment, created_at, user:profiles(username)')
     .order('created_at', { ascending: false });
-  if (error) console.error('Error loading reviews:', error);
+  if (error) console.error('Error loading reviews:', why(error));
   return error || !data ? [] : (data as unknown as ReviewRow[]);
 }

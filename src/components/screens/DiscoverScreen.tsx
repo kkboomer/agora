@@ -63,6 +63,8 @@ interface OptionsState {
 }
 
 function CardFace({ item, filter, options, note }: { item: DiscoverItem; filter: StyleFilter | null; options?: OptionsState; note?: string }) {
+  // Nothing to choose (one size, at most one colour): just say so, and there's nothing to expand.
+  const fixed = item.sizes.length <= 1 && item.colorOptions.length <= 1;
   const summary = options && (options.size || options.color) ? [options.size, options.color].filter(Boolean).join(' · ') : 'View options';
   return (
     <>
@@ -82,17 +84,21 @@ function CardFace({ item, filter, options, note }: { item: DiscoverItem; filter:
         <div className="meta">
           <span>${item.price}</span>
           <span className="dot">•</span>
-          <button
-            type="button"
-            data-options
-            className={`options-toggle ${options?.open ? 'open' : ''}`}
-            aria-expanded={options?.open ?? false}
-            tabIndex={options ? 0 : -1}
-            onClick={options?.onToggle}
-          >
-            {summary}
-            <Icon name="arrow" size={13} />
-          </button>
+          {fixed ? (
+            <span className="options-fixed">One size</span>
+          ) : (
+            <button
+              type="button"
+              data-options
+              className={`options-toggle ${options?.open ? 'open' : ''}`}
+              aria-expanded={options?.open ?? false}
+              tabIndex={options ? 0 : -1}
+              onClick={options?.onToggle}
+            >
+              {summary}
+              <Icon name="arrow" size={13} />
+            </button>
+          )}
         </div>
         <AnimatePresence initial={false}>
           {options?.open && (
@@ -127,8 +133,7 @@ function CardFace({ item, filter, options, note }: { item: DiscoverItem; filter:
                 )}
                 <div className="opt-group">
                   <span className="opt-title">
-                    {item.sizes.length > 1 ? 'Size' : 'Fit'}
-                    {item.sizes.length <= 1 ? ' · One size' : ''}
+                    Size · {item.sizes.length > 1 ? (options.size ?? 'Choose one') : 'One size'}
                   </span>
                   {item.sizes.length > 1 && (
                     <div className="opt-sizes" role="radiogroup" aria-label="Size">
@@ -326,8 +331,9 @@ export default function DiscoverScreen({
     toastTimer.current = window.setTimeout(() => setToast(null), 2200);
   };
   // One-size items need no pick; colour is optional, so it defaults to the first.
+  // One-size items need no pick: they add straight away.
   const oneSize = item.sizes.length <= 1;
-  const chosenSize = oneSize ? (item.sizes[0] ?? '') : size;
+  const chosenSize = oneSize ? (item.sizes[0] ?? 'One size') : size;
   const chosenColor = color ?? item.colorOptions[0]?.name ?? '';
 
   const shareItem = async () => {
