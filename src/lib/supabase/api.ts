@@ -204,6 +204,45 @@ export async function fetchFriendsWithCollections(
   }));
 }
 
+/** Looks people up by @username or name (never returns the searcher). */
+export async function searchProfiles(query: string, userId: string): Promise<{ id: string; display_name: string; username: string }[]> {
+  if (!isSupabaseConfigured) return [];
+  const q = query.trim().replace(/^@/, '').replace(/[%,()_]/g, '');
+  if (!q) return [];
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, display_name, username')
+    .neq('id', userId)
+    .or(`username.ilike.${q}%,display_name.ilike.%${q}%`)
+    .limit(20);
+  return error || !data ? [] : data;
+}
+
+/** Friending is instant: one accepted row, no approval. */
+export async function addFriendship(userId: string, friendId: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const { data: existing } = await supabase
+    .from('friendships')
+    .select('id')
+    .or(`and(requester_id.eq.${userId},addressee_id.eq.${friendId}),and(requester_id.eq.${friendId},addressee_id.eq.${userId})`)
+    .maybeSingle();
+  if (existing) {
+    const { error } = await supabase.from('friendships').update({ status: 'accepted' }).eq('id', existing.id);
+    return !error;
+  }
+  const { error } = await supabase.from('friendships').insert({ requester_id: userId, addressee_id: friendId, status: 'accepted' });
+  return !error;
+}
+
+export async function removeFriendship(userId: string, friendId: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const { error } = await supabase
+    .from('friendships')
+    .delete()
+    .or(`and(requester_id.eq.${userId},addressee_id.eq.${friendId}),and(requester_id.eq.${friendId},addressee_id.eq.${userId})`);
+  return !error;
+}
+
 /**
  * 1-Click Checkout: Converts selected cart items into verified Purchases
  * AND awards Promo Brand bonus coins automatically via our SQL RPC.

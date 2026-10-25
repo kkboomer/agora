@@ -14,15 +14,15 @@ import CartScreen from '@/components/screens/CartScreen';
 import { EMPTY_FILTERS, type ProductFilters } from '@/lib/filters';
 import SearchScreen, { type StyleFilter } from '@/components/screens/SearchScreen';
 import type { FeedTab, SwipeIntent } from '@/components/screens/DiscoverScreen';
-import { INITIAL_FRIENDS, type Friend } from '@/lib/friends';
+import type { Friend } from '@/lib/friends';
 import DevNav, { type DevScreen } from '@/components/ui/DevNav';
-import { findProduct } from '@/lib/discoverFeed';
+import { DISCOVER_ITEMS, findProduct } from '@/lib/discoverFeed';
 import type { Variant } from '@/components/ui/ProductSheet';
 import { REVIEWS, type Review } from '@/lib/reviews';
 import { INITIAL_COLLECTIONS, LIKED_ID, type Collection } from '@/lib/collections';
-import { cartItemIdFor, sortLikedFirst, toUiCollection, toUiFriend } from '@/lib/accountMapping';
+import { AVATAR_COLORS, cartItemIdFor, sortLikedFirst, toUiCollection, toUiFriend } from '@/lib/accountMapping';
 import { currentUser, signIn, signOut, signUp, type AuthUser } from '@/lib/supabase/auth';
-import { fetchAvatar, fetchCartItems, fetchCollections, fetchFriendsWithCollections, recordSwipe, removeAvatar, removeFromCart, toggleLikedItem, uploadAvatar } from '@/lib/supabase/api';
+import { addFriendship, removeFriendship, searchProfiles, fetchAvatar, fetchCartItems, fetchCollections, fetchFriendsWithCollections, recordSwipe, removeAvatar, removeFromCart, toggleLikedItem, uploadAvatar } from '@/lib/supabase/api';
 import { DEMO_USER_ID, isSupabaseConfigured } from '@/lib/supabase/client';
 
 /** Screens that sit outside the bottom-nav tabs. */
@@ -46,7 +46,7 @@ export default function AgoraApp() {
   // Product filters (size, colour, price...) are set from Home or Discover and applied in Discover.
   const [productFilters, setProductFilters] = useState<ProductFilters>(EMPTY_FILTERS);
   const [feedTab, setFeedTab] = useState<FeedTab>('For You');
-  const [friends, setFriends] = useState<Friend[]>(INITIAL_FRIENDS);
+  const [friends, setFriends] = useState<Friend[]>([]);
   const [openCollectionId, setOpenCollectionId] = useState<string | null>(null);
   const [collections, setCollections] = useState<Collection[]>(INITIAL_COLLECTIONS);
   const [cart, setCart] = useState<CartEntry[]>([]);
@@ -65,7 +65,7 @@ export default function AgoraApp() {
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
 
   // What "logging out" resets to: the mock data, or the account's data once Supabase has loaded it.
-  const baseline = useRef<{ collections: Collection[]; friends: Friend[] }>({ collections: INITIAL_COLLECTIONS, friends: INITIAL_FRIENDS });
+  const baseline = useRef<{ collections: Collection[]; friends: Friend[] }>({ collections: INITIAL_COLLECTIONS, friends: [] });
 
   // A brand-new account starts empty, not with the mock collections and friends.
   const applyAccount = (user: AuthUser) => {
@@ -425,8 +425,22 @@ export default function AgoraApp() {
             name={userName}
             handle={userHandle}
             friends={friends}
-            onAddFriend={(f) => setFriends((fs) => (fs.some((x) => x.tag === f.tag) ? fs : [...fs, f]))}
-            onUnfriend={(tag) => setFriends((fs) => fs.filter((f) => f.tag !== tag))}
+            onSearchPeople={async (q) => {
+              const rows = await searchProfiles(q, userId);
+              return rows.map((r, i) => ({ id: r.id, name: r.display_name, tag: `@${r.username}`, initial: r.display_name[0] ?? '?', color: AVATAR_COLORS[i % AVATAR_COLORS.length], collections: [] }));
+            }}
+            onAddFriend={async (f) => {
+              if (f.id && !(await addFriendship(userId, f.id))) return;
+              const fresh = await fetchFriendsWithCollections(userId);
+              const mapped = fresh.map(toUiFriend);
+              baseline.current.friends = mapped;
+              setFriends(mapped);
+            }}
+            onUnfriend={(tag) => {
+              const gone = friends.find((f) => f.tag === tag);
+              setFriends((fs) => fs.filter((f) => f.tag !== tag));
+              if (gone?.id) removeFriendship(userId, gone.id);
+            }}
             onAddToCart={addToCart}
             cartCount={cartCount}
             onOpenCart={() => setOverlay('cart')}
@@ -462,7 +476,24 @@ export default function AgoraApp() {
     }
   };
 
-  const devScreen: DevScreen = overlay === 'collection' ? 'profile' : overlay === 'product' ? 'home' : overlay ?? (nav === 'closet' ? 'search' : (nav as DevScreen));
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const devGo = (id: DevScreen) => {
+    if (id === 'login' || id === 'signup') {
+      setAuthMode(id);
+      setOverlay(null);
+      setSession(null);
+      return;
+    }
+    if (!session) applyGuest();
+    if (id === 'search' || id === 'settings' || id === 'cart') setOverlay(id);
+    else if (id === 'product') {
+      setOpenProductId(DISCOVER_ITEMS[0]?.id ?? null);
+      setOverlay('product');
+    } else if (id === 'collection') openCollection(collections[0]?.id ?? LIKED_ID);
+    else goTo(id);
+  };
+
+  const devScreen: DevScreen = overlay ?? (nav === 'closet' ? 'search' : (nav as DevScreen));
 
   if (!authReady) return null;
 
@@ -480,7 +511,10 @@ export default function AgoraApp() {
       return null;
     };
     return (
+      <>
       <AuthScreen
+        key={authMode}
+        initialMode={authMode}
         onLogin={async (identifier, password) => enter(await signIn(identifier, password))}
         onSignUp={async (details) => {
           const error = await signUp(details);
@@ -495,6 +529,8 @@ export default function AgoraApp() {
         }}
         onGuest={applyGuest}
       />
+      {process.env.NODE_ENV !== 'production' && <DevNav current={authMode} onGo={devGo} />}
+      </>
     );
   }
 
@@ -504,7 +540,7 @@ export default function AgoraApp() {
       {process.env.NODE_ENV !== 'production' && (
         <DevNav
           current={devScreen}
-          onGo={(id) => (id === 'search' || id === 'settings' || id === 'cart' ? setOverlay(id) : goTo(id))}
+          onGo={devGo}
         />
       )}
     </>

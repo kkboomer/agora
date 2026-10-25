@@ -16,6 +16,7 @@ interface Props {
   onLogin: (identifier: string, password: string) => Promise<string | null>;
   onSignUp: (details: SignUpDetails) => Promise<string | null>;
   onGuest: () => void;
+  initialMode?: 'login' | 'signup';
 }
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -45,8 +46,8 @@ function PasswordField({ value, onChange, label = 'Password', autoComplete }: { 
 }
 
 /** First screen: log in, sign up for an account, or carry on as a guest. UI only; nothing is verified yet. */
-export default function AuthScreen({ onLogin, onSignUp, onGuest }: Props) {
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+export default function AuthScreen({ onLogin, onSignUp, onGuest, initialMode = 'login' }: Props) {
+  const [mode, setMode] = useState<'login' | 'signup'>(initialMode);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 

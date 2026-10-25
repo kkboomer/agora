@@ -1,35 +1,67 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import BottomSheet from './BottomSheet';
 import Icon from './Icon';
-import { PEOPLE, type Friend } from '@/lib/friends';
+import type { Friend } from '@/lib/friends';
 
 interface Props {
   open: boolean;
   onClose: () => void;
   friends: Friend[];
-  onAdd: (friend: Friend) => void;
+  onAdd: (friend: Friend) => void | Promise<void>;
+  /** Queries the database for people matching the typed @username or name. */
+  onSearch: (query: string) => Promise<Friend[]>;
 }
 
 /** Find people by name or @tag and add them straight away: no request, no approval. */
-export default function FriendSearchSheet({ open, onClose, friends, onAdd }: Props) {
+export default function FriendSearchSheet({ open, onClose, friends, onAdd, onSearch }: Props) {
   const [query, setQuery] = useState('');
   // People added during this visit stay listed (as "Added") instead of vanishing.
   const [added, setAdded] = useState<string[]>([]);
+
+  const [found, setFound] = useState<Friend[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  // Parents pass a fresh function every render; a ref keeps the debounce from restarting.
+  const search = useRef(onSearch);
+  useEffect(() => {
+    search.current = onSearch;
+  });
+
+  const q = query.trim().replace(/^@/, '');
 
   useEffect(() => {
     if (!open) {
       setQuery('');
       setAdded([]);
+      setFound([]);
     }
   }, [open]);
 
-  const q = query.trim().toLowerCase().replace(/^@/, '');
+  // Look people up as you type (debounced), ignoring answers that arrive late.
+  useEffect(() => {
+    if (!open || !q) {
+      setFound([]);
+      setSearching(false);
+      return;
+    }
+    let stale = false;
+    setSearching(true);
+    const t = setTimeout(() => {
+      search.current(q)
+        .then((r) => !stale && setFound(r))
+        .catch(() => !stale && setFound([]))
+        .finally(() => !stale && setSearching(false));
+    }, 250);
+    return () => {
+      stale = true;
+      clearTimeout(t);
+    };
+  }, [q, open]);
+
   const isFriend = (tag: string) => friends.some((f) => f.tag === tag);
-  const results = PEOPLE.filter(
-    (p) => (!isFriend(p.tag) || added.includes(p.tag)) && (!q || p.name.toLowerCase().includes(q) || p.tag.slice(1).toLowerCase().includes(q)),
-  );
+  const results = found.filter((p) => !isFriend(p.tag) || added.includes(p.tag));
 
   return (
     <BottomSheet open={open} onClose={onClose} label="Find friends" height="70%" title={<div><h2>Find friends</h2></div>}>
@@ -38,8 +70,8 @@ export default function FriendSearchSheet({ open, onClose, friends, onAdd }: Pro
         <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by name or @tag" aria-label="Search for friends" />
       </form>
       <ul className="coll-list">
-        {results.length === 0 && (
-          <li className="friend-search-empty">{q ? `No one found for “${query.trim()}”.` : 'You’re already friends with everyone here.'}</li>
+        {(results.length === 0 || (!q)) && (
+          <li className="friend-search-empty">{!q ? 'Type a name or @username to find someone.' : searching ? 'Searching…' : `No one found for “${query.trim()}”.`}</li>
         )}
         {results.map((p) => {
           const done = added.includes(p.tag);

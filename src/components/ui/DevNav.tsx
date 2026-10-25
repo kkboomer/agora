@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-export type DevScreen = 'discover' | 'home' | 'search' | 'profile' | 'gifts' | 'settings' | 'cart';
+export type DevScreen = 'discover' | 'home' | 'search' | 'profile' | 'gifts' | 'settings' | 'cart' | 'product' | 'collection' | 'login' | 'signup';
 
 const screens: { id: DevScreen; label: string }[] = [
   { id: 'discover', label: 'Discover' },
@@ -12,6 +12,10 @@ const screens: { id: DevScreen; label: string }[] = [
   { id: 'gifts', label: 'Friends' },
   { id: 'cart', label: 'Cart' },
   { id: 'settings', label: 'Settings' },
+  { id: 'product', label: 'Product page' },
+  { id: 'collection', label: 'Collection' },
+  { id: 'login', label: 'Log in' },
+  { id: 'signup', label: 'Sign up' },
 ];
 
 interface Props {

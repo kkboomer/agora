@@ -21,7 +21,8 @@ interface Props {
   handle: string;
   friends: Friend[];
   onUnfriend: (tag: string) => void;
-  onAddFriend: (friend: Friend) => void;
+  onAddFriend: (friend: Friend) => void | Promise<void>;
+  onSearchPeople: (query: string) => Promise<Friend[]>;
   onAddToCart: (itemId: string, variant: Variant) => void;
   cartCount: number;
   onOpenCart: () => void;
@@ -31,7 +32,7 @@ interface Props {
   onSignIn: () => void;
 }
 
-export default function FriendsScreen({ nav, onNav, name, handle, friends, onUnfriend, onAddFriend, onAddToCart, cartCount, onOpenCart, isLiked, onToggleLike, guest = false, onSignIn }: Props) {
+export default function FriendsScreen({ nav, onNav, name, handle, friends, onUnfriend, onAddFriend, onSearchPeople, onAddToCart, cartCount, onOpenCart, isLiked, onToggleLike, guest = false, onSignIn }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const [friendTab, setFriendTab] = useState<'collections' | 'reviews'>('collections');
   const [viewing, setViewing] = useState<Collection | null>(null);
@@ -163,11 +164,6 @@ export default function FriendsScreen({ nav, onNav, name, handle, friends, onUnf
                   </button>
                 ))}
               </section>
-              <div className="invite-card">
-                <span><Icon name="userPlus" size={21} /></span>
-                <div><h3>Grow your circle</h3><p>Share your tag so friends can find you.</p></div>
-                <button>Invite</button>
-              </div>
             </>
           )}
         </div>
@@ -199,7 +195,7 @@ export default function FriendsScreen({ nav, onNav, name, handle, friends, onUnf
           </BottomSheet>
         )}
 
-        <FriendSearchSheet open={finding} onClose={() => setFinding(false)} friends={friends} onAdd={onAddFriend} />
+        <FriendSearchSheet open={finding} onClose={() => setFinding(false)} friends={friends} onAdd={onAddFriend} onSearch={onSearchPeople} />
         <BottomNav current={nav} onChange={onNav} variant="home" />
       </section>
     </main>

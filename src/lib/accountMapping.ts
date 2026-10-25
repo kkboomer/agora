@@ -7,7 +7,7 @@ type DbCollectionWithItems = DbCollection & { items: { product: DbProduct }[] };
 
 const productToItemId = (productId: string) => CATALOG.find((i) => i.productId === productId)?.id;
 
-const AVATAR_COLORS = ['#aa7058', '#647277', '#82715f', '#6e7562', '#9a6d72'];
+export const AVATAR_COLORS = ['#aa7058', '#647277', '#82715f', '#6e7562', '#9a6d72'];
 
 /** Supabase collection -> the shape the UI uses. Products that aren't in the catalog yet are skipped. */
 export function toUiCollection(c: DbCollectionWithItems): Collection {
@@ -27,6 +27,7 @@ export const sortLikedFirst = (cs: Collection[]) => [...cs].sort((a, b) => Numbe
 
 export function toUiFriend(f: FriendWithCollections, index: number): Friend {
   return {
+    id: f.profile.id,
     name: f.profile.display_name,
     tag: `@${f.profile.username}`,
     initial: f.profile.display_name[0] ?? '?',
