@@ -6,6 +6,7 @@ export interface AuthUser {
   /** Includes the leading @ */
   handle: string;
   avatarUrl: string | null;
+  darkMode: boolean;
 }
 
 const AVATAR_PATH = '/storage/v1/object/public/avatars/';
@@ -18,6 +19,8 @@ export async function currentUser(): Promise<AuthUser | null> {
   if (!user) return null;
 
   const { data: profile } = await supabase.from('profiles').select('username, display_name, avatar_url').eq('id', user.id).maybeSingle();
+  // Separate query so a database that hasn't had the dark_mode migration yet still logs in.
+  const { data: prefs } = await supabase.from('profiles').select('dark_mode').eq('id', user.id).maybeSingle();
   const username = profile?.username ?? user.user_metadata?.username ?? user.email?.split('@')[0] ?? 'me';
   return {
     id: user.id,
@@ -25,6 +28,7 @@ export async function currentUser(): Promise<AuthUser | null> {
     handle: `@${username}`,
     // The schema default is a stock image; only an uploaded photo counts.
     avatarUrl: profile?.avatar_url?.includes(AVATAR_PATH) ? profile.avatar_url : null,
+    darkMode: Boolean(prefs?.dark_mode),
   };
 }
 

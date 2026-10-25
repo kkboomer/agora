@@ -22,7 +22,7 @@ import { REVIEWS, type Review } from '@/lib/reviews';
 import { INITIAL_COLLECTIONS, LIKED_ID, type Collection } from '@/lib/collections';
 import { AVATAR_COLORS, cartItemIdFor, sortLikedFirst, toUiCollection, toUiFriend } from '@/lib/accountMapping';
 import { currentUser, signIn, signOut, signUp, type AuthUser } from '@/lib/supabase/auth';
-import { addFriendship, removeFriendship, searchProfiles, fetchAvatar, fetchCartItems, fetchCollections, fetchFriendsWithCollections, recordSwipe, removeAvatar, removeFromCart, toggleLikedItem, uploadAvatar } from '@/lib/supabase/api';
+import { updateDarkMode, updateDisplayName, addFriendship, removeFriendship, searchProfiles, fetchAvatar, fetchCartItems, fetchCollections, fetchFriendsWithCollections, recordSwipe, removeAvatar, removeFromCart, toggleLikedItem, uploadAvatar } from '@/lib/supabase/api';
 import { DEMO_USER_ID, isSupabaseConfigured } from '@/lib/supabase/client';
 
 /** Screens that sit outside the bottom-nav tabs. */
@@ -79,6 +79,7 @@ export default function AgoraApp() {
     setUserName(user.name);
     setUserHandle(user.handle);
     setUserPhoto(user.avatarUrl);
+    setDarkMode(user.darkMode);
     setNav('discover');
     setOverlay(null);
     setSession('member');
@@ -358,9 +359,18 @@ export default function AgoraApp() {
           handle={userHandle}
           photo={userPhoto}
           onChangePhoto={changePhoto}
-          onChangeName={setUserName}
+          onChangeName={async (next) => {
+            const previous = userName;
+            setUserName(next);
+            // Members' names live in profiles.display_name; put the old one back if the save fails.
+            if (signedIn && isSupabaseConfigured && !(await updateDisplayName(userId, next))) setUserName(previous);
+          }}
           darkMode={darkMode}
-          onToggleDark={() => setDarkMode((v) => !v)}
+          onToggleDark={() => {
+            const next = !darkMode;
+            setDarkMode(next);
+            if (signedIn && isSupabaseConfigured) updateDarkMode(userId, next);
+          }}
           onLogout={handleLogout}
           guest={!signedIn}
           onSignIn={goToSignIn}

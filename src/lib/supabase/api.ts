@@ -479,3 +479,22 @@ export async function fetchAvatar(userId: string = DEMO_USER_ID): Promise<string
   // Only uploaded photos count; the schema default is a stock image.
   return url && url.includes(`/storage/v1/object/public/${AVATAR_BUCKET}/`) ? url : null;
 }
+
+/** Saves the profile's display name. */
+export async function updateDisplayName(userId: string, name: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const { data, error } = await supabase.from('profiles').update({ display_name: name }).eq('id', userId).select('id');
+  // An update that matches no row isn't an error, so check a row actually changed.
+  if (error || !data?.length) {
+    console.error('Could not save display name', error ?? `no profiles row for ${userId}`);
+    return false;
+  }
+  return true;
+}
+
+/** Saves the account's dark-mode choice. */
+export async function updateDarkMode(userId: string, dark: boolean): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const { error } = await supabase.from('profiles').update({ dark_mode: dark }).eq('id', userId);
+  return !error;
+}
