@@ -14,7 +14,7 @@ export default function FriendMatchBadge({ item, friendActivities }: FriendMatch
   if (!hasMatch) return null;
 
   return (
-    <div className="mb-2.5 flex max-w-[320px] items-start gap-2.5 rounded-2xl border border-purple-400/30 bg-gradient-to-r from-purple-900/80 to-indigo-950/80 p-3 text-white shadow-xl backdrop-blur-md">
+    <div className="mb-2.5 flex max-w-[320px] items-start gap-2.5 rounded-2xl border border-purple-400/30 bg-gradient-to-r from-purple-900/80 to-indigo-950/80 p-3 text-white shadow-xl opacity-90 backdrop-blur-md">
       <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-purple-500/25 text-purple-200">
         <Users className="h-4 w-4" />
       </span>

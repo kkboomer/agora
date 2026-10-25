@@ -12,7 +12,7 @@ export default function AIRecommendationBadge({ item }: AIRecommendationBadgePro
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="mb-2.5 max-w-[320px] select-none pointer-events-auto">
+    <div className="mb-2.5 max-w-[320px] select-none pointer-events-auto opacity-95">
       {item.isPromoted && (
         <div className="mb-1.5 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#D98A76] to-amber-500/90 px-3 py-0.5 text-[10px] font-bold tracking-wide text-white shadow-md">
           <Coins className="h-3 w-3 text-amber-100" />
