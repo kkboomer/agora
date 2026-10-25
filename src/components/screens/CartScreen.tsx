@@ -3,6 +3,7 @@ import { useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import BottomNav, { type NavTab } from '@/components/ui/BottomNav';
 import type { DiscoverItem } from '@/lib/discoverFeed';
+import GiftObolsSheet, { type GiftProps } from '@/components/ui/GiftObolsSheet';
 import { discountAmount, findDiscount } from '@/lib/discounts';
 
 export interface CartLine {
@@ -39,9 +40,10 @@ interface Props {
   onApplyCode: (code: string | null) => void;
   /** Mock checkout: resolves to a reason it didn't go through, or null when the order is placed. */
   onCheckout: () => string | null;
+  gift: GiftProps;
 }
 
-export default function CartScreen({ nav, onNav, onBack, lines, onChangeQty, appliedCode, onApplyCode, onCheckout }: Props) {
+export default function CartScreen({ nav, onNav, onBack, lines, onChangeQty, appliedCode, onApplyCode, onCheckout, gift }: Props) {
   const [done, setDone] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [input, setInput] = useState('');
@@ -49,8 +51,10 @@ export default function CartScreen({ nav, onNav, onBack, lines, onChangeQty, app
 
   const count = lines.reduce((n, l) => n + l.qty, 0);
   const subtotal = lines.reduce((n, l) => n + l.qty * l.item.price, 0);
+  const obols = lines.reduce((n, l) => n + l.qty * (l.item.obolReward ?? 0), 0);
   const discount = findDiscount(appliedCode ?? '');
-  const saving = discountAmount(discount, subtotal);
+  const priciest = Math.max(0, ...lines.map((l) => l.item.price));
+  const saving = discountAmount(discount, subtotal, priciest);
   const total = subtotal - saving;
 
   const applyCode = () => {
@@ -70,6 +74,7 @@ export default function CartScreen({ nav, onNav, onBack, lines, onChangeQty, app
       <main className="app-shell">
         <section className="phone cart-screen" aria-label="Order placed">
           <OrderPlaced onDone={onBack} />
+          <GiftObolsSheet {...gift} />
           <BottomNav current={null} onChange={onNav} variant="home" />
         </section>
       </main>
@@ -157,6 +162,12 @@ export default function CartScreen({ nav, onNav, onBack, lines, onChangeQty, app
               <>
                 <div className="cart-line"><span>Subtotal</span><span>{money(subtotal)}</span></div>
                 <div className="cart-line saving"><span>Discount</span><span>−{money(saving)}</span></div>
+              </>
+            )}
+            {obols > 0 && (
+              <>
+                <div className="cart-line reward"><span>Obols reward</span><span>+{obols}</span></div>
+                <div className="cart-line reward"><span>Gift reward<small>to send to a friend, or toss</small></span><span>+{obols}</span></div>
               </>
             )}
             <div className="cart-total"><span>Total</span><strong>{money(total)}</strong></div>

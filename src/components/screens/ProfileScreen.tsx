@@ -30,9 +30,10 @@ interface Props {
   myReviews: Record<string, Review>;
   onSaveReview: (itemId: string, rating: number, text: string) => void;
   purchases: Purchase[];
+  onOpenFriends: () => void;
 }
 
-export default function ProfileScreen({ nav, onNav, collections, onOpenCollection, onCreateCollection, name, photo, guest = false, onSignIn, onOpenSettings, myReviews, onSaveReview, purchases }: Props) {
+export default function ProfileScreen({ nav, onNav, collections, onOpenCollection, onCreateCollection, name, photo, guest = false, onSignIn, onOpenSettings, myReviews, onSaveReview, purchases, onOpenFriends }: Props) {
   const [profileTab, setProfileTab] = useState<'collections' | 'purchased'>('collections');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [rating, setRating] = useState(0);
@@ -79,7 +80,7 @@ export default function ProfileScreen({ nav, onNav, collections, onOpenCollectio
             <button aria-label="Profile settings" onClick={onOpenSettings}><Icon name="cog" size={20} /></button>
           </header>
 
-          <button className="my-friends-btn" onClick={() => (guest ? setPrompt('see and add friends') : onNav('gifts'))}>
+          <button className="my-friends-btn" onClick={() => (guest ? setPrompt('see and add friends') : onOpenFriends())}>
             <Icon name="userPlus" size={16} />My friends
           </button>
 

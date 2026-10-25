@@ -2,14 +2,15 @@
 
 import { useState } from 'react';
 
-export type DevScreen = 'discover' | 'home' | 'search' | 'profile' | 'gifts' | 'settings' | 'cart' | 'product' | 'collection' | 'login' | 'signup';
+export type DevScreen = 'discover' | 'home' | 'search' | 'profile' | 'gifts' | 'friends' | 'settings' | 'cart' | 'product' | 'collection' | 'login' | 'signup';
 
 const screens: { id: DevScreen; label: string }[] = [
   { id: 'discover', label: 'Discover' },
   { id: 'home', label: 'Home' },
   { id: 'search', label: 'Browse / Search' },
   { id: 'profile', label: 'Profile' },
-  { id: 'gifts', label: 'Friends' },
+  { id: 'gifts', label: 'Gifts' },
+  { id: 'friends', label: 'Friends' },
   { id: 'cart', label: 'Cart' },
   { id: 'settings', label: 'Settings' },
   { id: 'product', label: 'Product page' },

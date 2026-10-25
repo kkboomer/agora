@@ -104,7 +104,6 @@ export default function SearchScreen({ nav, onNav, initialGender, onSelect, onSe
                     onClick={() => setOpen(isOpen ? null : group.name)}
                   >
                     <span>{group.name}</span>
-                    <small>{group.items.length}</small>
                     <Icon name="arrow" size={18} className="chevron" />
                   </button>
                   {isOpen && (

@@ -17,6 +17,7 @@ import type { Collection } from '@/lib/collections';
 import type { Friend } from '@/lib/friends';
 import { reviewsFor, type Review } from '@/lib/reviews';
 import { DISCOVER_ITEMS, type DiscoverItem } from '@/lib/discoverFeed';
+import type { GiftProps } from '@/components/ui/GiftObolsSheet';
 import FilterSheet from '@/components/ui/FilterSheet';
 import { activeFilterCount, matchesFilters, type ProductFilters } from '@/lib/filters';
 
@@ -182,6 +183,7 @@ interface Props {
   appliedCode: string | null;
   onApplyCode: (code: string | null) => void;
   onCheckout: () => string | null;
+  gift: GiftProps;
   onSwipe: (intent: SwipeIntent, id: string, variant?: Variant) => void;
   reviews: Review[];
   filter: StyleFilter | null;
@@ -213,6 +215,7 @@ export default function DiscoverScreen({
   appliedCode,
   onApplyCode,
   onCheckout,
+  gift,
   reviews,
   filter,
   productFilters: filters,
@@ -491,7 +494,7 @@ export default function DiscoverScreen({
                 <>
                   <h2>Add some friends</h2>
                   <p>Oh, it’s quiet in here. Add friends and you’ll see what they like and save.</p>
-                  <button className="deck-empty-primary" onClick={() => onNav('gifts')}>Find friends</button>
+                  <button className="deck-empty-primary" onClick={gift.onFindFriends}>Find friends</button>
                   <button onClick={() => onFeedTab('For You')}>Browse Discover</button>
                 </>
               ) : friendsTab && feed.length === 0 ? (
@@ -689,6 +692,7 @@ export default function DiscoverScreen({
           appliedCode={appliedCode}
           onApplyCode={onApplyCode}
           onCheckout={onCheckout}
+          gift={gift}
         />
         <ReviewsSheet item={item} reviews={reviews} open={reviewsOpen} onClose={() => setReviewsOpen(false)} />
         <CollectionSheet

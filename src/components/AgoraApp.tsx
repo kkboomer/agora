@@ -6,6 +6,7 @@ import DiscoverScreen from '@/components/screens/DiscoverScreen';
 import HomeScreen from '@/components/screens/HomeScreen';
 import ProfileScreen from '@/components/screens/ProfileScreen';
 import FriendsScreen from '@/components/screens/FriendsScreen';
+import GiftsScreen from '@/components/screens/GiftsScreen';
 import SettingsScreen from '@/components/screens/SettingsScreen';
 import AuthScreen from '@/components/screens/AuthScreen';
 import ProductScreen from '@/components/screens/ProductScreen';
@@ -16,7 +17,8 @@ import SearchScreen, { type StyleFilter } from '@/components/screens/SearchScree
 import type { FeedTab, SwipeIntent } from '@/components/screens/DiscoverScreen';
 import type { Friend } from '@/lib/friends';
 import DevNav, { type DevScreen } from '@/components/ui/DevNav';
-import { discountAmount, findDiscount } from '@/lib/discounts';
+import { discountAmount, findDiscount, isRewardCode, setUnlockedCodes } from '@/lib/discounts';
+import { REWARDS, type GiftEntry } from '@/lib/rewards';
 import type { Purchase } from '@/lib/purchases';
 import { DISCOVER_ITEMS, addDbProducts, findProduct } from '@/lib/discoverFeed';
 import type { Variant } from '@/components/ui/ProductSheet';
@@ -24,11 +26,11 @@ import { timeAgo, type Review } from '@/lib/reviews';
 import { INITIAL_COLLECTIONS, LIKED_ID, type Collection } from '@/lib/collections';
 import { AVATAR_COLORS, cartItemIdFor, sortLikedFirst, toUiCollection, toUiFriend } from '@/lib/accountMapping';
 import { currentUser, signIn, signOut, signUp, type AuthUser } from '@/lib/supabase/auth';
-import { fetchAllReviews, fetchPurchases, recordPurchases, submitReview, fetchAllProducts, updateDarkMode, updateDisplayName, addFriendship, removeFriendship, searchProfiles, fetchAvatar, fetchCartItems, fetchCollections, fetchFriendsWithCollections, recordSwipe, removeAvatar, removeCartLine, saveCartLine, removeFromCart, toggleLikedItem, uploadAvatar } from '@/lib/supabase/api';
+import { fetchGifts, fetchObolBalance, fetchRewardLog, spendObols, markRewardUsed, fetchAllReviews, fetchPurchases, recordPurchases, submitReview, fetchAllProducts, updateDarkMode, updateDisplayName, addFriendship, removeFriendship, searchProfiles, fetchAvatar, fetchCartItems, fetchCollections, fetchFriendsWithCollections, giftObols, grantObols, recordSwipe, removeAvatar, removeCartLine, saveCartLine, removeFromCart, toggleLikedItem, uploadAvatar } from '@/lib/supabase/api';
 import { DEMO_USER_ID, isSupabaseConfigured } from '@/lib/supabase/client';
 
 /** Screens that sit outside the bottom-nav tabs. */
-type Overlay = 'search' | 'settings' | 'cart' | 'collection' | 'product' | null;
+type Overlay = 'search' | 'settings' | 'cart' | 'collection' | 'product' | 'friends' | null;
 interface CartEntry {
   key: string;
   id: string;
@@ -271,12 +273,82 @@ export default function AgoraApp() {
     setCart((c) => c.flatMap((e) => (e.key !== key ? [e] : e.qty + delta <= 0 ? [] : [{ ...e, qty: e.qty + delta }])));
   };
 
+  // Obols: the balance, the rewards claimed and not used yet, and the gift history.
+  const [obolBalance, setObolBalance] = useState(0);
+  const [rewardCodes, setRewardCodes] = useState<string[]>([]);
+  const [giftEntries, setGiftEntries] = useState<GiftEntry[]>([]);
+  const updateRewardCodes = (codes: string[]) => {
+    setRewardCodes(codes);
+    setUnlockedCodes(codes);
+  };
+  // Reloads the balance and gift history, so gifts friends sent you show up.
+  const refreshObols = () => {
+    if (session !== 'member') return;
+    fetchObolBalance(userId).then((b) => b !== null && setObolBalance(b));
+    fetchGifts(userId).then((rows) =>
+      setGiftEntries(
+        rows.map((row) => {
+          return { id: row.id, direction: row.direction, name: row.name, amount: row.amount, brand: row.brand, when: timeAgo(row.created_at) };
+        }),
+      ),
+    );
+  };
+  useEffect(() => {
+    if (session !== 'member') {
+      setObolBalance(0);
+      setRewardCodes([]);
+      setUnlockedCodes([]);
+      setGiftEntries([]);
+      return;
+    }
+    fetchRewardLog(userId).then((rows) => {
+      // Claims ("… [CODE]", negative) minus uses ("Used reward [CODE]") is what's still available.
+      const counts: Record<string, number> = {};
+      for (const row of rows) {
+        const code = row.description.match(/\[([A-Z0-9]+)\]/)?.[1];
+        if (!code) continue;
+        counts[code] = (counts[code] ?? 0) + (row.amount < 0 ? 1 : row.description.startsWith('Used') ? -1 : 0);
+      }
+      updateRewardCodes(Object.entries(counts).flatMap(([code, n]) => Array<string>(Math.max(0, n)).fill(code)));
+    });
+    refreshObols();
+  }, [session, userId]);
+
+  const claimReward = async (rewardId: string): Promise<string | null> => {
+    const reward = REWARDS.find((r) => r.id === rewardId);
+    if (!reward) return 'That reward isn’t available.';
+    if (obolBalance < reward.cost) return 'Not enough obols yet.';
+    const next = await spendObols(userId, reward.cost, `Reward: ${reward.title} [${reward.code}]`);
+    if (next === null) return 'Couldn’t claim that. Try again.';
+    setObolBalance(next);
+    updateRewardCodes([...rewardCodes, reward.code]);
+    return null;
+  };
+
+  // Gift reward from the last purchase, waiting for the buyer to send it to a friend or toss it.
+  const [pendingGift, setPendingGift] = useState(0);
+  const [pendingBrand, setPendingBrand] = useState('');
+  const gift = {
+    amount: pendingGift,
+    friends,
+    onSend: async (friend: Friend) => {
+      const sent = friend.id ? await giftObols(userId, friend.id, pendingGift, pendingBrand || undefined) : false;
+      if (sent) {
+        setGiftEntries((g) => [{ id: `local-${Date.now()}`, direction: 'sent', name: friend.name, amount: pendingGift, brand: pendingBrand || null, when: '1m' }, ...g]);
+        setPendingGift(0);
+      }
+      return sent;
+    },
+    onToss: () => setPendingGift(0),
+    onFindFriends: () => setOverlay('friends'),
+  };
+
   // Fake checkout. Only an order that comes to $0 (the ALLFREE code) goes through; nothing is charged.
   const checkout = (): string | null => {
     if (!signedIn) return 'Log in to check out.';
     if (cartLines.length === 0) return 'Your cart is empty.';
     const subtotal = cartLines.reduce((n, l) => n + l.qty * l.item.price, 0);
-    const total = subtotal - discountAmount(findDiscount(discountCode ?? ''), subtotal);
+    const total = subtotal - discountAmount(findDiscount(discountCode ?? ''), subtotal, Math.max(0, ...cartLines.map((l) => l.item.price)));
     if (total > 0) return 'Payments aren’t set up yet. Use code ALLFREE to try checkout.';
 
     const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -285,14 +357,28 @@ export default function AgoraApp() {
       .map((l) => ({ id: `p-${Date.now()}-${l.item.id}`, itemId: l.item.id, purchasedOn: today, pricePaid: 0 }));
     const next = [...fresh, ...purchases];
     setPurchases(next);
+    const obolsFor = (itemId: string) => cartLines.filter((l) => l.item.id === itemId).reduce((n, l) => n + l.qty * (l.item.obolReward ?? 0), 0);
     const rows = fresh.flatMap((p) => {
       const productId = findProduct(p.itemId)?.productId;
-      return productId ? [{ productId, pricePaid: p.pricePaid }] : [];
+      return productId ? [{ productId, pricePaid: p.pricePaid, obolsEarned: obolsFor(p.itemId) }] : [];
     });
     recordPurchases(userId, rows);
+    // The buyer earns the purchase's obols, and an equal gift reward is offered to send to a friend.
+    const earned = cartLines.reduce((n, l) => n + l.qty * (l.item.obolReward ?? 0), 0);
+    if (earned > 0) {
+      grantObols(userId, earned, 'Purchase reward').then((balance) => balance !== null && setObolBalance(balance));
+      setPendingBrand([...new Set(cartLines.filter((l) => (l.item.obolReward ?? 0) > 0).map((l) => l.item.brand))].join(', '));
+      setPendingGift(earned);
+    }
     cartLines.forEach((l) => {
       if (l.item.productId) removeFromCart(l.item.productId, userId);
     });
+    // A reward code is single-use: log it as used and take one off the claimed list.
+    if (discountCode && isRewardCode(discountCode)) {
+      markRewardUsed(userId, `Used reward [${discountCode}]`);
+      const at = rewardCodes.indexOf(discountCode);
+      if (at >= 0) updateRewardCodes(rewardCodes.filter((_, i) => i !== at));
+    }
     setCart([]);
     setDiscountCode(null);
     return null;
@@ -434,7 +520,41 @@ export default function AgoraApp() {
     signOut();
   };
 
+  const friendsScreen = () => (
+        <FriendsScreen
+            guest={!signedIn}
+            onSignIn={goToSignIn}
+            nav="profile"
+            onNav={goTo}
+            name={userName}
+            handle={userHandle}
+            friends={friends}
+            onSearchPeople={async (q) => {
+              const rows = await searchProfiles(q, userId);
+              return rows.map((r, i) => ({ id: r.id, name: r.display_name, tag: `@${r.username}`, initial: r.display_name[0] ?? '?', color: AVATAR_COLORS[i % AVATAR_COLORS.length], collections: [] }));
+            }}
+            onAddFriend={async (f) => {
+              if (f.id && !(await addFriendship(userId, f.id))) return;
+              const fresh = await fetchFriendsWithCollections(userId);
+              const mapped = fresh.map(toUiFriend);
+              baseline.current.friends = mapped;
+              setFriends(mapped);
+            }}
+            onUnfriend={(tag) => {
+              const gone = friends.find((f) => f.tag === tag);
+              setFriends((fs) => fs.filter((f) => f.tag !== tag));
+              if (gone?.id) removeFriendship(userId, gone.id);
+            }}
+            onAddToCart={addToCart}
+            cartCount={cartCount}
+            onOpenCart={() => setOverlay('cart')}
+            isLiked={isLiked}
+            onToggleLike={(id) => toggleInCollection(LIKED_ID, id)}
+          />
+  );
+
   const renderScreen = () => {
+    if (overlay === 'friends') return friendsScreen();
     if (overlay === 'collection') {
       const collection = collections.find((c) => c.id === openCollectionId);
       if (collection) {
@@ -475,7 +595,7 @@ export default function AgoraApp() {
       }
     }
     if (overlay === 'cart') {
-      return <CartScreen nav={nav} onNav={goTo} onBack={() => goTo(nav)} lines={cartLines} onChangeQty={changeQty} appliedCode={discountCode} onApplyCode={setDiscountCode} onCheckout={checkout} />;
+      return <CartScreen nav={nav} onNav={goTo} onBack={() => goTo(nav)} lines={cartLines} onChangeQty={changeQty} appliedCode={discountCode} onApplyCode={setDiscountCode} onCheckout={checkout} gift={gift} />;
     }
     if (overlay === 'settings') {
       return (
@@ -551,42 +671,26 @@ export default function AgoraApp() {
             myReviews={myReviews}
             onSaveReview={saveReview}
             purchases={purchases}
+            onOpenFriends={() => setOverlay('friends')}
             name={userName}
             photo={userPhoto}
             onOpenSettings={() => setOverlay('settings')}
           />
         );
       case 'gifts':
-        return <FriendsScreen
+        return (
+          <GiftsScreen
             guest={!signedIn}
             onSignIn={goToSignIn}
             nav={nav}
             onNav={goTo}
-            name={userName}
-            handle={userHandle}
-            friends={friends}
-            onSearchPeople={async (q) => {
-              const rows = await searchProfiles(q, userId);
-              return rows.map((r, i) => ({ id: r.id, name: r.display_name, tag: `@${r.username}`, initial: r.display_name[0] ?? '?', color: AVATAR_COLORS[i % AVATAR_COLORS.length], collections: [] }));
-            }}
-            onAddFriend={async (f) => {
-              if (f.id && !(await addFriendship(userId, f.id))) return;
-              const fresh = await fetchFriendsWithCollections(userId);
-              const mapped = fresh.map(toUiFriend);
-              baseline.current.friends = mapped;
-              setFriends(mapped);
-            }}
-            onUnfriend={(tag) => {
-              const gone = friends.find((f) => f.tag === tag);
-              setFriends((fs) => fs.filter((f) => f.tag !== tag));
-              if (gone?.id) removeFriendship(userId, gone.id);
-            }}
-            onAddToCart={addToCart}
-            cartCount={cartCount}
-            onOpenCart={() => setOverlay('cart')}
-            isLiked={isLiked}
-            onToggleLike={(id) => toggleInCollection(LIKED_ID, id)}
-          />;
+            balance={obolBalance}
+            claimed={rewardCodes}
+            onClaim={claimReward}
+            gifts={giftEntries}
+            onRefresh={refreshObols}
+          />
+        );
       default:
         return (
           <DiscoverScreen
@@ -616,6 +720,7 @@ export default function AgoraApp() {
             appliedCode={discountCode}
             onApplyCode={setDiscountCode}
             onCheckout={checkout}
+            gift={gift}
             reviews={allReviews}
           />
         );
@@ -631,7 +736,7 @@ export default function AgoraApp() {
       return;
     }
     if (!session) applyGuest();
-    if (id === 'search' || id === 'settings' || id === 'cart') setOverlay(id);
+    if (id === 'search' || id === 'settings' || id === 'cart' || id === 'friends') setOverlay(id);
     else if (id === 'product') {
       setOpenProductId(DISCOVER_ITEMS[0]?.id ?? null);
       setOverlay('product');

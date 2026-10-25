@@ -530,11 +530,11 @@ export async function fetchPurchases(userId: string): Promise<{ id: string; prod
 }
 
 /** Saves a placed order (one row per product). Returns false if the save failed. */
-export async function recordPurchases(userId: string, items: { productId: string; pricePaid: number }[]): Promise<boolean> {
+export async function recordPurchases(userId: string, items: { productId: string; pricePaid: number; obolsEarned?: number }[]): Promise<boolean> {
   if (!isSupabaseConfigured || items.length === 0) return false;
   const { error } = await supabase
     .from('purchases')
-    .insert(items.map((i) => ({ user_id: userId, product_id: i.productId, price_paid: i.pricePaid, obols_earned: 0, is_public: true })));
+    .insert(items.map((i) => ({ user_id: userId, product_id: i.productId, price_paid: i.pricePaid, obols_earned: i.obolsEarned ?? 0, is_public: true })));
   if (error) console.error('Error saving purchases:', why(error));
   return !error;
 }
@@ -558,4 +558,75 @@ export async function fetchAllReviews(): Promise<ReviewRow[]> {
     .order('created_at', { ascending: false });
   if (error) console.error('Error loading reviews:', why(error));
   return error || !data ? [] : (data as unknown as ReviewRow[]);
+}
+
+/** Adds obols to a member's balance (and logs it). Returns the new balance, or null if it failed. */
+export async function grantObols(userId: string, amount: number, description: string, reason = 'purchase_reward'): Promise<number | null> {
+  if (!isSupabaseConfigured || amount <= 0) return null;
+  const { data, error } = await supabase.rpc('grant_obols', { p_user_id: userId, p_amount: amount, p_reason: reason, p_description: description });
+  if (error) console.error('Error granting obols:', why(error));
+  return error ? null : (data as number);
+}
+
+/** Sends a purchase's gift reward to a friend. Returns false if it didn't go through. */
+export async function giftObols(fromId: string, toId: string, amount: number, brand?: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const { error } = await supabase.rpc('gift_obols', { p_from_id: fromId, p_to_id: toId, p_amount: amount, p_brand: brand ?? null });
+  if (error) console.error('Error gifting obols:', why(error));
+  return !error;
+}
+
+export async function fetchObolBalance(userId: string): Promise<number | null> {
+  if (!isSupabaseConfigured) return null;
+  const { data, error } = await supabase.from('profiles').select('obol_balance').eq('id', userId).maybeSingle();
+  return error || !data ? null : (data.obol_balance as number);
+}
+
+export interface GiftRow {
+  id: string;
+  direction: 'sent' | 'received';
+  /** The other person's display name. */
+  name: string;
+  amount: number;
+  brand: string | null;
+  created_at: string;
+}
+
+/** Gifts you've sent or received, newest first, read from the obol history ("Gift from Maya · Brand" / "Gift to Maya · Brand"). */
+export async function fetchGifts(userId: string): Promise<GiftRow[]> {
+  if (!isSupabaseConfigured) return [];
+  const { data, error } = await supabase
+    .from('obol_transactions')
+    .select('id, amount, reason, description, created_at')
+    .eq('user_id', userId)
+    .in('reason', ['gift_received', 'gift_sent'])
+    .order('created_at', { ascending: false });
+  if (error) console.error('Error loading gifts:', why(error));
+  if (error || !data) return [];
+  return data.map((row) => {
+    const received = row.reason === 'gift_received';
+    const [name, ...brand] = row.description.replace(/^Gift (from|to) /, '').split(' · ');
+    return { id: row.id, direction: received ? 'received' : 'sent', name: name || 'Someone', amount: row.amount, brand: brand.join(' · ') || null, created_at: row.created_at };
+  });
+}
+
+/** Spends obols on a reward. Returns the new balance, or null if it failed (for example, not enough obols). */
+export async function spendObols(userId: string, amount: number, description: string): Promise<number | null> {
+  if (!isSupabaseConfigured) return null;
+  const { data, error } = await supabase.rpc('spend_obols', { p_user_id: userId, p_amount: amount, p_description: description });
+  if (error) console.error('Error spending obols:', why(error));
+  return error ? null : (data as number);
+}
+
+export async function markRewardUsed(userId: string, description: string): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  const { error } = await supabase.rpc('use_reward', { p_user_id: userId, p_description: description });
+  if (error) console.error('Error marking reward used:', why(error));
+}
+
+/** Descriptions of reward claims ("Reward: … [CODE]") and uses ("Used reward [CODE]"), from the obol history. */
+export async function fetchRewardLog(userId: string): Promise<{ amount: number; description: string }[]> {
+  if (!isSupabaseConfigured) return [];
+  const { data, error } = await supabase.from('obol_transactions').select('amount, description').eq('user_id', userId).eq('reason', 'redemption');
+  return error || !data ? [] : data;
 }

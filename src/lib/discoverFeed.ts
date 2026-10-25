@@ -14,6 +14,8 @@ export interface DiscoverItem {
   colors?: number;
   colorOptions: ColorOption[];
   sizes: string[];
+  /** Obols earned by buying this (the database's obol_reward). */
+  obolReward?: number;
   /** Filterable attributes (see lib/filters.ts). */
   style?: string;
   fit?: string;
@@ -43,6 +45,7 @@ interface DbProductRow {
   category: string;
   tags: string[] | null;
   description: string | null;
+  obol_reward?: number | null;
 }
 
 const SIZES_BY_CATEGORY: Record<string, string[]> = {
@@ -68,6 +71,7 @@ export function addDbProducts(rows: DbProductRow[]): boolean {
       title: row.title,
       description: row.description ?? row.category,
       price: Number(row.price),
+      obolReward: row.obol_reward ?? 0,
       colorOptions: [],
       sizes: SIZES_BY_CATEGORY[row.category] ?? [],
       style: row.tags?.[0],

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import BottomSheet from './BottomSheet';
 import Icon from './Icon';
 import { money, OrderPlaced, type CartLine } from '@/components/screens/CartScreen';
+import GiftObolsSheet, { type GiftProps } from './GiftObolsSheet';
 import { discountAmount, findDiscount } from '@/lib/discounts';
 
 interface Props {
@@ -16,10 +17,11 @@ interface Props {
   onApplyCode: (code: string | null) => void;
   /** Mock checkout: resolves to a reason it didn't go through, or null when the order is placed. */
   onCheckout: () => string | null;
+  gift: GiftProps;
 }
 
 /** Cart as a popup sheet: scrollable pieces, with discount and checkout pinned underneath. */
-export default function CartSheet({ open, onClose, lines, onChangeQty, appliedCode, onApplyCode, onCheckout }: Props) {
+export default function CartSheet({ open, onClose, lines, onChangeQty, appliedCode, onApplyCode, onCheckout, gift }: Props) {
   const [done, setDone] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [promoOpen, setPromoOpen] = useState(false);
@@ -28,8 +30,10 @@ export default function CartSheet({ open, onClose, lines, onChangeQty, appliedCo
 
   const count = lines.reduce((n, l) => n + l.qty, 0);
   const subtotal = lines.reduce((n, l) => n + l.qty * l.item.price, 0);
+  const obols = lines.reduce((n, l) => n + l.qty * (l.item.obolReward ?? 0), 0);
   const discount = findDiscount(appliedCode ?? '');
-  const saving = discountAmount(discount, subtotal);
+  const priciest = Math.max(0, ...lines.map((l) => l.item.price));
+  const saving = discountAmount(discount, subtotal, priciest);
 
   const applyCode = () => {
     if (!input.trim()) return;
@@ -52,6 +56,7 @@ export default function CartSheet({ open, onClose, lines, onChangeQty, appliedCo
   };
 
   return (
+    <>
     <BottomSheet
       open={open}
       onClose={close}
@@ -133,6 +138,12 @@ export default function CartSheet({ open, onClose, lines, onChangeQty, appliedCo
             {discount && (
               <div className="cart-line saving"><span>Discount</span><span>−{money(saving)}</span></div>
             )}
+            {obols > 0 && (
+              <>
+                <div className="cart-line reward"><span>Obols reward</span><span>+{obols}</span></div>
+                <div className="cart-line reward"><span>Gift reward<small>to send to a friend, or toss</small></span><span>+{obols}</span></div>
+              </>
+            )}
             <div className="cart-total"><span>Total</span><strong>{money(subtotal - saving)}</strong></div>
             {checkoutError && <p className="promo-error" role="alert">{checkoutError}</p>}
             <button
@@ -150,5 +161,8 @@ export default function CartSheet({ open, onClose, lines, onChangeQty, appliedCo
         </>
       )}
     </BottomSheet>
+    {/* After the cart sheet, so it stacks above it. */}
+    <GiftObolsSheet {...gift} />
+    </>
   );
 }
